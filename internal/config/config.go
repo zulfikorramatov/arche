@@ -38,8 +38,10 @@ type HTTPConfig struct {
 }
 
 type LoggerConfig struct {
-	Level  string `env:"LOG_LEVEL"  env-default:"info"`
-	Format string `env:"LOG_FORMAT" env-default:"json"`
+	Level        string `env:"LOG_LEVEL"  env-default:"info"`
+	Format       string `env:"LOG_FORMAT" env-default:"json"`
+	APM          bool   `env:"LOG_APM" env-default:"false"`
+	SamplingRate int    `env:"LOG_SAMPLING_RATE" env-default:"100"`
 }
 
 type PostgresConfig struct {

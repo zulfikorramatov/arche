@@ -19,14 +19,7 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
-	// Map internal/config sub-structs to /pkg configs. postgres and redis use
-	// explicit struct conversion (identical field layout); logger is built
-	// field-by-field because AppName is sourced from cfg.App, not cfg.Logger.
-	log, err := logger.New(logger.Config{
-		AppName: cfg.App.Name,
-		Level:   cfg.Logger.Level,
-		Format:  cfg.Logger.Format,
-	})
+	log, err := logger.New(logger.Config(cfg.Logger))
 	if err != nil {
 		return fmt.Errorf("new logger: %w", err)
 	}
