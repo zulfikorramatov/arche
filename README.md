@@ -1,80 +1,105 @@
 # arche
 
-Template for Go microservices. Uses [chi](https://github.com/go-chi/chi),
-[zap](https://github.com/uber-go/zap), [pgx](https://github.com/jackc/pgx),
-and [go-redis](https://github.com/redis/go-redis), wired together behind a
-config-driven `internal/app`.
+Шаблон для Go-микросервисов. Использует [chi](https://github.com/go-chi/chi),
+[zap](https://github.com/uber-go/zap), [pgx](https://github.com/jackc/pgx)
+и [go-redis](https://github.com/redis/go-redis), связанные через
+конфиг-ориентированный `internal/app`.
 
-## Layout
+## Структура проекта
 
 ```
 .
-├── cmd/app/            # main.go — load config, wire signal context, call app.Run
+├── cmd/app/            # main.go — загрузка конфига, signal context, вызов app.Run
 ├── internal/
-│   ├── app/            # composition root: build deps, start HTTP server
-│   ├── config/         # aggregated Config (HTTP + pkg configs)
-│   ├── domain/         # entities and domain errors
-│   ├── repository/     # postgres-backed repositories
-│   ├── service/        # business logic, uses repo + cache
-│   └── http/           # router, handlers, middleware
-├── pkg/                # reusable, independent libraries — plain Config structs, no env tags
-│   ├── logger/         #   zap wrapper
+│   ├── app/            # composition root: сборка зависимостей, запуск HTTP-сервера
+│   ├── config/         # агрегированный Config (HTTP + pkg-конфиги)
+│   ├── domain/         # сущности и доменные ошибки
+│   ├── repository/     # postgres-репозитории
+│   ├── service/        # бизнес-логика, использует repo + cache
+│   └── http/           # роутер, хэндлеры, middleware
+├── pkg/                # переиспользуемые библиотеки — plain Config, без env-тегов
+│   ├── logger/         #   обёртка над zap
 │   ├── postgres/       #   pgx pool
-│   └── redis/          #   go-redis client
-├── migrations/         # golang-migrate SQL files
-├── .env.example        # single source of runtime config
+│   └── redis/          #   go-redis клиент
+├── migrations/         # SQL-миграции (golang-migrate)
+├── .env.example        # единый источник runtime-конфигурации
 ├── docker-compose.yml  # app + postgres + redis + migrate
-├── Dockerfile          # multi-stage build, Go 1.25
+├── Dockerfile          # multi-stage сборка, Go 1.25
 └── Makefile
 ```
 
-## Quickstart
+## Требования
+
+| Зависимость | Версия | Назначение |
+|-------------|--------|------------|
+| [Go](https://go.dev/dl/) | 1.25+ | компиляция и запуск |
+| [Docker](https://docs.docker.com/get-docker/) + Compose | — | контейнеры для postgres, redis, app |
+| [golangci-lint](https://golangci-lint.run/welcome/install/) | 2.x | линтинг (`make lint`) |
+| [golang-migrate](https://github.com/golang-migrate/migrate) | 4.x | миграции БД (`make migrate-*`) |
+
+## Быстрый старт
 
 ```sh
 cp .env.example .env
-make up           # build & start app + postgres + redis + run migrations
+make up           # собрать и запустить app + postgres + redis + миграции
 curl localhost:8080/healthz
 ```
 
-Local dev without containers:
+Локальная разработка без контейнеров для приложения:
 
 ```sh
 make tidy
 docker compose up -d postgres redis
 make migrate-up
-make run          # loads .env from the project root
+make run          # загружает .env из корня проекта
 ```
 
-## Config
+## Make-команды
 
-All runtime config comes from environment variables. `internal/config` reads
-`.env` (if present) plus the process environment into a `Config` struct
-whose sub-structs own the env tags. The `/pkg/*` libraries are independent
-and use plain `Config` structs with no tags; `internal/app/app.go` maps
-between them with explicit struct conversion:
+| Команда | Описание |
+|---------|----------|
+| `make help` | Показать список всех целей |
+| `make tidy` | `go mod tidy` |
+| `make build` | Собрать бинарник в `bin/arche` |
+| `make run` | Запустить локально (читает `.env`) |
+| `make test` | Тесты с race detector |
+| `make lint` | Запуск golangci-lint |
+| `make fmt` | Форматирование + `go vet` |
+| `make up` | Запуск docker-compose стека |
+| `make down` | Остановка docker-compose стека |
+| `make logs` | Логи приложения в реальном времени |
+| `make migrate-up` | Применить все миграции |
+| `make migrate-down` | Откатить одну миграцию |
+| `make migrate-new name=add_xxx` | Создать новую миграцию |
+| `make clean` | Удалить `bin/` |
+
+## Конфигурация
+
+Вся runtime-конфигурация приходит из переменных окружения. `internal/config`
+читает `.env` (если есть) и окружение процесса в структуру `Config`,
+чьи подструктуры владеют env-тегами. Библиотеки `/pkg/*` независимы и
+используют plain `Config`-структуры без тегов; `internal/app/app.go`
+связывает их через явное преобразование структур:
 
 ```go
-log, _  := logger.New(logger.Config(cfg.Logger))
-pg,  _  := postgres.New(ctx, postgres.Config(cfg.Postgres))
-rdb, _  := redis.New(ctx, redis.Config(cfg.Redis))
+log, err := logger.New(logger.Config(cfg.Logger))
+pg,  err := postgres.New(ctx, postgres.Config(cfg.Postgres))
+rdb, err := redis.New(ctx, redis.Config(cfg.Redis))
 ```
 
-If a field is added on one side but not the other, this stops compiling.
+Если поле добавлено на одной стороне, но не на другой — код перестаёт компилироваться.
 
-## API
+## Клонирование для нового сервиса
 
-| Method | Path                | Description     |
-| ------ | ------------------- | --------------- |
-| GET    | `/healthz`          | liveness probe  |
-| POST   | `/api/v1/users`     | create a user   |
-| GET    | `/api/v1/users/{id}`| fetch by id     |
-
-## Cloning for a new service
-
-1. `git clone` and `rm -rf .git && git init`
-2. Open the project in GoLand, open `go.mod`, right-click the module path on
-   the `module` line → **Refactor → Rename** → enter the new path. GoLand
-   rewrites every import across the repo in one pass.
-3. Rename containers and `APP_NAME` in `docker-compose.yml` / `.env`
-4. Replace the `user` domain/service/repository/handler with yours
+1. `git clone` → `rm -rf .git && git init`
+2. Переименовать модуль — заменить `github.com/zulfikorramatov/arche` на новый путь:
+   ```sh
+   grep -rl "github.com/zulfikorramatov/arche" . --include="*.go" --include="go.mod" | xargs sed -i '' 's|github.com/zulfikorramatov/arche|github.com/your-org/your-service|g'
+   ```
+3. Переименовать контейнеры и `APP_NAME` в `docker-compose.yml` / `.env`
+4. Заменить домен `user` (service/repository/handler) на свой
 5. `make tidy && make up`
+
+## Стиль кода
+
+Конвенции описаны в [STYLEGUIDE.md](STYLEGUIDE.md).

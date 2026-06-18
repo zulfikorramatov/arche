@@ -42,11 +42,7 @@ env-aware config and reusable libraries:
   two worlds meet. It maps env-config → pkg-config:
 
   ```go
-  log, _ := logger.New(logger.Config{
-      AppName: cfg.App.Name,           // sourced from cfg.App, not cfg.Logger
-      Level:   cfg.Logger.Level,
-      Format:  cfg.Logger.Format,
-  })
+  log, _ := logger.New(logger.Config(cfg.Logger))            // struct conversion
   pg,  _ := postgres.New(ctx, postgres.Config(cfg.Postgres)) // struct conversion
   rdb, _ := redis.New(ctx, redis.Config(cfg.Redis))          // struct conversion
   ```
@@ -58,18 +54,12 @@ env-aware config and reusable libraries:
   library, add a plain field; add the env tag on the matching
   `internal/config.*Config` sub-struct.
 - **Field layout of `config.PostgresConfig` and `pkg/postgres.Config` must
-  match exactly** (names, types, order). Same for redis. The explicit
+  match exactly** (names, types, order). Same for redis and logger. The explicit
   `postgres.Config(cfg.Postgres)` conversion fails to compile on drift —
   this is the intended safety net. Don't refactor it into a reflective copy.
-- **Logger is the exception**: `pkg/logger.Config` has an `AppName` field
-  that has no counterpart on `config.LoggerConfig`. It's sourced from
-  `cfg.App.Name` in `app.go`. That's why logger uses field-by-field
-  construction instead of struct conversion.
 
 ### Reserved fields (currently unused — don't remove)
 
-- `pkg/logger.Config.AppName` — reserved for future logger wiring; populated
-  but not yet consumed by `logger.New`.
 - `config.AppConfig.Env` — read from `APP_ENV`, not currently wired anywhere.
 
 ### Request-flow layering
