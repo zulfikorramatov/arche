@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -52,8 +51,6 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, 
 		if json.Unmarshal(data, &cached) == nil {
 			return &cached, nil
 		}
-	} else if !errors.Is(err, redis.Nil) {
-		// cache miss is fine; other errors fall through to DB
 	}
 
 	u, err := s.repo.GetByID(ctx, id)
