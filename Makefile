@@ -9,6 +9,11 @@ POSTGRES_DSN   ?= postgres://postgres:postgres@localhost:5432/app?sslmode=disabl
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS=":.*?## "} {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: generate
+generate: ## Generate server code from the OpenAPI spec
+	go tool oapi-codegen -config generated/api/definitions-cfg.yaml generated/api/definitions.yaml
+	go tool oapi-codegen -config generated/api/cfg.yaml generated/api/api.yaml
+
 .PHONY: tidy
 tidy: ## Run go mod tidy
 	go mod tidy

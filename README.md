@@ -10,13 +10,17 @@
 ```
 .
 ├── cmd/app/            # main.go — загрузка конфига, signal context, вызов app.Run
+├── generated/api/      # spec-first HTTP контракт: OpenAPI spec + сгенерированный код
+│   ├── definitions.yaml/.go  # общие schemas/parameters (x-go-type маппинг)
+│   ├── api.yaml              # paths/operations
+│   └── *-cfg.yaml, gen.go    # конфиги генерации + сгенерированный strict-server (НЕ РЕДАКТИРОВАТЬ)
 ├── internal/
 │   ├── app/            # composition root: сборка зависимостей, запуск HTTP-сервера
 │   ├── config/         # агрегированный Config (HTTP + pkg-конфиги)
 │   ├── domain/         # сущности и доменные ошибки
 │   ├── repository/     # postgres-репозитории
 │   ├── service/        # бизнес-логика, использует repo + cache
-│   └── http/           # роутер, хэндлеры, middleware
+│   └── http/           # роутер (strict adapter + OpenAPI validator), реализация StrictServerInterface
 ├── pkg/                # переиспользуемые библиотеки — plain Config, без env-тегов
 │   ├── logger/         #   обёртка над zap
 │   ├── postgres/       #   pgx pool
@@ -59,6 +63,7 @@ make run          # загружает .env из корня проекта
 | Команда | Описание |
 |---------|----------|
 | `make help` | Показать список всех целей |
+| `make generate` | Сгенерировать код сервера из OpenAPI спеки |
 | `make tidy` | `go mod tidy` |
 | `make build` | Собрать бинарник в `bin/arche` |
 | `make run` | Запустить локально (читает `.env`) |
@@ -88,6 +93,28 @@ rdb, err := redis.New(ctx, redis.Config(cfg.Redis))
 ```
 
 Если поле добавлено на одной стороне, но не на другой — код перестаёт компилироваться.
+
+## Spec-first API
+
+HTTP-контракт — единственный источник истины. Код сервера генерируется из
+OpenAPI спеки через [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen)
+(strict-server режим), а `generated/api/gen.go` и `definitions.go` **не
+редактируются вручную**.
+
+Добавление/изменение эндпоинта:
+
+1. Описать path + operation в `generated/api/api.yaml` (уникальный `operationId`),
+   новые типы — в `definitions.yaml`.
+2. `make generate` — перегенерировать код.
+3. `go build ./...` — компилятор укажет, что `Server` не реализует новый метод
+   `StrictServerInterface`.
+4. Реализовать метод в `internal/http/handler/` (приходит типизированный
+   `*RequestObject`, возвращается типизированный `*ResponseObject`).
+5. Готово — роут зарегистрирован автоматически.
+
+Входящие запросы валидируются по встроенной (embedded) спеке middleware-ом
+`OapiRequestValidator` ещё до попадания в хендлер: отсутствующие параметры,
+несоответствие schema и неверный `Content-Type` отклоняются с `400`.
 
 ## Клонирование для нового сервиса
 

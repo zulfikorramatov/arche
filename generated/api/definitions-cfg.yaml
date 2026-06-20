@@ -1,0 +1,7 @@
+package: api
+generate:
+  models: true
+output: generated/api/definitions.go
+output-options:
+  nullable-type: true
+  skip-prune: true

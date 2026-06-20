@@ -2,91 +2,74 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this repo is
+## What this is
 
-A Go 1.25 microservice **template**, not a finished service. The sample `user`
-domain exists to demonstrate the layout — when this template is cloned for a
-new service it should be replaced. Cloning steps live in `README.md` under
-"Cloning for a new service".
+`arche` is a **template** for Go microservices (chi + zap + pgx + go-redis). It ships a single example domain (`user`) wired end to end so it can be cloned and reshaped per service. README.md has the clone-and-rename checklist. When adding a feature, mirror the `user` vertical slice rather than inventing new layering.
 
-## Common commands
+## Commands
 
-| Task                  | Command                                          |
-| --------------------- | ------------------------------------------------ |
-| Tidy modules          | `make tidy`                                      |
-| Build binary          | `make build`                                     |
-| Run locally           | `make run` (reads `.env` via godotenv)           |
-| Tests with race       | `make test`                                      |
-| Single test           | `go test -race -run TestName ./internal/service` |
-| Lint                  | `make lint` (requires `golangci-lint`)           |
-| Format + vet          | `make fmt`                                       |
-| Start full stack      | `make up`                                        |
-| Tail app logs         | `make logs`                                      |
-| Apply migrations      | `make migrate-up`                                |
-| New migration         | `make migrate-new name=add_xxx`                  |
+```sh
+make generate                  # regenerate generated/api/*.go from the OpenAPI spec
+make run                       # run locally, loads .env from project root
+make test                      # go test -race -count=1 ./...
+make lint                      # golangci-lint run ./...
+make fmt                       # gofmt -s -w . && go vet ./...
+make build                     # -> bin/arche
+make up / make down / make logs   # docker-compose stack (app + postgres + redis + migrate)
+make migrate-up / migrate-down
+make migrate-new name=add_xxx  # scaffold a new SQL migration pair
 
-Local dev without containers: `docker compose up -d postgres redis && make migrate-up && make run`.
+go test -race -run TestUserService_Create ./internal/service   # single test
+```
 
-## Architecture: composition root + tag-free pkg
+Local dev without containerizing the app: `docker compose up -d postgres redis` → `make migrate-up` → `make run`. Requires Go 1.25+, golangci-lint 2.x, golang-migrate 4.x.
 
-The non-obvious shape of this repo is the **strict separation** between
-env-aware config and reusable libraries:
+## Architecture
 
-- `internal/config/config.go` is the **only** place env-var names exist
-  (struct tags `env:"..."`). It loads `.env` (optional) and the process
-  environment via `cleanenv` + `godotenv`.
-- `pkg/{logger,postgres,redis}` each expose a `Config` struct with **plain Go
-  fields and no tags**. They have zero knowledge of `.env`, `cleanenv`, or
-  `internal/*`. Each is meant to be copy-pasted into another service unchanged.
-- `internal/app/app.go` is the composition root and the **only** place these
-  two worlds meet. It maps env-config → pkg-config:
+Request flow and dependency direction:
 
-  ```go
-  log, _ := logger.New(logger.Config(cfg.Logger))            // struct conversion
-  pg,  _ := postgres.New(ctx, postgres.Config(cfg.Postgres)) // struct conversion
-  rdb, _ := redis.New(ctx, redis.Config(cfg.Redis))          // struct conversion
-  ```
+```
+generated/api/*.yaml    OpenAPI spec — the single source of truth for the HTTP contract
+  → generated/api/*.go  oapi-codegen output (strict server, models, embedded spec) — DO NOT EDIT
+cmd/app/main.go         config.Load + signal.NotifyContext, calls app.Run
+  → internal/app        composition root: builds every dependency, owns lifecycle
+      → internal/http   chi router: strict adapter + OpenAPI validator middleware
+          → handler     implements api.StrictServerInterface; maps domain <-> generated types
+              → service business logic, repo + redis cache
+                  → repository  raw pgx SQL, maps pg errors to domain errors
+                      → domain  entities + sentinel errors (ErrUserNotFound, ...)
+```
 
-### Invariants that protect this design
+Wiring is **manual** in `internal/app/app.go` (no DI framework) — construct repo → service → handler `Server` → router, then start `http.Server` with graceful shutdown driven by the signal context.
 
-- **`pkg/*` must never import from `internal/*`** and must never reference
-  env vars, `.env`, or `cleanenv`. If you need a new config knob in a `/pkg`
-  library, add a plain field; add the env tag on the matching
-  `internal/config.*Config` sub-struct.
-- **Field layout of `config.PostgresConfig` and `pkg/postgres.Config` must
-  match exactly** (names, types, order). Same for redis and logger. The explicit
-  `postgres.Config(cfg.Postgres)` conversion fails to compile on drift —
-  this is the intended safety net. Don't refactor it into a reflective copy.
+### Spec-first HTTP layer (the important convention)
 
-### Reserved fields (currently unused — don't remove)
+The HTTP contract is **generated, not hand-written**. `generated/api/` holds two specs and two generator configs:
+- `definitions.yaml` — reusable schemas/parameters; `x-go-type` maps OpenAPI types onto existing Go types (e.g. `UUID` → `uuid.UUID`). Generated into `definitions.go`.
+- `api.yaml` — paths/operations; `$ref`s into `definitions.yaml`. `cfg.yaml` uses `import-mapping: { ./definitions.yaml: "-" }` so it reuses the `definitions.go` types instead of regenerating them. Generated into `gen.go`.
+- `gen.go` / `definitions.go` are **regenerated, never edited** (run `make generate`).
 
-- `config.AppConfig.Env` — read from `APP_ENV`, not currently wired anywhere.
+`internal/http/handler` implements the generated `api.StrictServerInterface` (the `var _ api.StrictServerInterface = (*Server)(nil)` check enforces this at compile time). Strict handlers receive a typed `*RequestObject` (body already decoded, params already parsed) and return a typed `*ResponseObject` — they never touch `http.ResponseWriter` or `json`. They only translate between generated types and the service layer and map domain sentinel errors to the response variant for that status (e.g. `ErrUserExists` → `CreateUser409JSONResponse`).
 
-### Request-flow layering
+`internal/http/router.go` wires it: chi router → `NewStrictHandlerWithOptions` (with request/response error funcs that emit JSON 400/500) → `HandlerWithOptions` with `BaseURL: "/api/v1"` and the `OapiRequestValidator` middleware. The validator uses the embedded spec to reject malformed requests (missing params, bad body, wrong content-type) **before** they reach a handler. Spec `Servers` stays set to `/api/v1` so the validator's router matches the prefixed paths; `SilenceServersWarning: true` quiets the (irrelevant, relative-URL) host-check warning. `/healthz` is registered directly on the base router, outside the validator.
 
-`cmd/app/main.go` → `internal/app.Run` → `internal/http.NewRouter` → handler
-→ service (interface) → repository. The handler depends on a `userService`
-interface defined in the handler package; the service depends on a
-`userRepository` interface defined in the service package. The concrete
-`UserRepository` lives in `internal/repository/`. This direction (interfaces
-declared by the consumer) is intentional — keep it.
+**To add or change an endpoint:** edit `api.yaml` (and `definitions.yaml` for new types) → `make generate` → the build breaks until you implement the new `StrictServerInterface` method in `internal/http/handler` → routes are registered automatically. Do not register routes by hand in `router.go`.
 
-### Re-exported types
+### `pkg/*` vs `internal/*` (the central convention)
 
-- `pkg/postgres.Pool` is a type alias for `*pgxpool.Pool`.
-- `pkg/redis.Client` is a type alias for `*goredis.Client`; `pkg/redis.Nil`
-  mirrors `goredis.Nil`.
+- `pkg/{logger,postgres,redis}` are **self-contained libraries**: zero knowledge of `internal/*`, env vars, or app config. They expose a plain `Config` struct with **no tags** and must be copy-pasteable to another project unchanged.
+- `internal/config/config.go` is the **only** place env tags live. Its sub-structs (`PostgresConfig`, `RedisConfig`, `LoggerConfig`) mirror the matching `pkg/*.Config` field-for-field (names, types, order).
+- `app.go` bridges them with explicit struct conversion: `postgres.New(ctx, postgres.Config(cfg.Postgres))`. If a field drifts between the two sides, **the build breaks** — that is the intended safety net, so keep the structs in lockstep.
 
-This lets `internal/*` consumers depend only on `pkg/*` and not import
-pgx/go-redis directly. Preserve these aliases when extending.
+### Config
 
-## Docker / env
+All runtime config comes from env (cleanenv + optional `.env` via godotenv). `.env.example` is the single source of truth for variable names; defaults live in `env-default` tags. In containers `.env` is absent and the runtime supplies vars directly — both paths work.
 
-`.env` defaults hostnames to `localhost` so `make run` works on the host.
-`docker-compose.yml` overrides `POSTGRES_HOST=postgres` and `REDIS_HOST=redis`
-via the app service's `environment:` block (which takes precedence over
-`env_file`). Don't move these overrides back into `.env` — that would break
-`make run` on the host.
+## Conventions (see STYLEGUIDE.md for the full list)
 
-The `migrate` service in compose is a one-shot runner that the `app` service
-depends on with `condition: service_completed_successfully`.
+- **Interfaces are consumer-defined**: declared unexported in the file that uses them, named by role (`userService`, `userRepository`), never in a shared `interfaces.go`. Mock via these, not a framework.
+- **Errors**: wrap with lowercase context (`fmt.Errorf("insert user: %w", err)`); domain sentinels (`ErrXxx`) for expected cases; compare with `errors.Is/As`; map infra errors → domain errors at the repository boundary (e.g. pg `23505` → `domain.ErrUserExists`). Discardable errors (cache writes, `log.Sync`) use `_ =`.
+- **SQL**: raw pgx, no ORM. Queries are `const q` inside the method, positional `$1` placeholders.
+- **Comments**: default to none — names carry meaning. Only package docs on `pkg/*` and notes on genuinely non-obvious decisions. No per-function doc comments on self-evident code; no ticket/PR references.
+- **Naming**: package names are single lowercase words; constructors `NewXxx`; JSON tags snake_case; env tags UPPER_SNAKE_CASE.
+- **Tests**: table-driven with `t.Run` subtests, named `TestType_Method_scenario`, race detector always on.

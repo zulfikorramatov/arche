@@ -30,6 +30,9 @@ linters:
         - fieldalignment
 
   exclusions:
+    generated: lax
+    paths:
+      - generated/api
     rules:
       - path: pkg/redis/redis.go
         linters:

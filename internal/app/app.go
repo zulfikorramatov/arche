@@ -39,9 +39,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	userRepo := repository.NewUserRepository(pg)
 	userSvc := service.NewUserService(userRepo, rdb)
-	userHandler := handler.NewUserHandler(userSvc, log)
+	server := handler.NewServer(userSvc, log)
 
-	router := httpserver.NewRouter(log, userHandler)
+	router, err := httpserver.NewRouter(log, server)
+	if err != nil {
+		return fmt.Errorf("new router: %w", err)
+	}
 
 	srv := &http.Server{
 		Addr:         cfg.HTTP.Addr,

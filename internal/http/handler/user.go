@@ -2,85 +2,34 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/domain"
 )
 
-type userService interface {
-	Create(ctx context.Context, email, name string) (*domain.User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
-}
-
-type UserHandler struct {
-	svc userService
-	log *zap.Logger
-}
-
-func NewUserHandler(svc userService, log *zap.Logger) *UserHandler {
-	return &UserHandler{svc: svc, log: log}
-}
-
-type createUserRequest struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
-func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	if req.Email == "" || req.Name == "" {
-		writeError(w, http.StatusBadRequest, "email and name are required")
-		return
-	}
-
-	u, err := h.svc.Create(r.Context(), req.Email, req.Name)
+func (s *Server) CreateUser(ctx context.Context, req api.CreateUserRequestObject) (api.CreateUserResponseObject, error) {
+	u, err := s.users.Create(ctx, string(req.Body.Email), req.Body.Name)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserExists) {
-			writeError(w, http.StatusConflict, "user already exists")
-			return
+			return api.CreateUser409JSONResponse{Error: "user already exists"}, nil
 		}
-		h.log.Error("create user", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
+		s.log.Error("create user", zap.Error(err))
+		return nil, err
 	}
-	writeJSON(w, http.StatusCreated, u)
+	return api.CreateUser201JSONResponse(toAPIUser(u)), nil
 }
 
-func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
-		return
-	}
-	u, err := h.svc.GetByID(r.Context(), id)
+func (s *Server) GetUserByID(ctx context.Context, req api.GetUserByIDRequestObject) (api.GetUserByIDResponseObject, error) {
+	u, err := s.users.GetByID(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
-			writeError(w, http.StatusNotFound, "user not found")
-			return
+			return api.GetUserByID404JSONResponse{Error: "user not found"}, nil
 		}
-		h.log.Error("get user", zap.Error(err))
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
+		s.log.Error("get user", zap.Error(err))
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, u)
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	return api.GetUserByID200JSONResponse(toAPIUser(u)), nil
 }
