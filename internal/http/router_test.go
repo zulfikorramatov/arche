@@ -53,7 +53,7 @@ func TestRouter_routesAndValidation(t *testing.T) {
 		svc      *fakeService
 		wantCode int
 	}{
-		{name: "healthz", method: http.MethodGet, path: "/healthz", svc: &fakeService{}, wantCode: http.StatusOK},
+		{name: "ping", method: http.MethodGet, path: "/ping", svc: &fakeService{}, wantCode: http.StatusOK},
 		{name: "create ok", method: http.MethodPost, path: "/api/v1/users", body: `{"email":"a@b.c","name":"bob"}`, svc: &fakeService{}, wantCode: http.StatusCreated},
 		{name: "create invalid body rejected by validator", method: http.MethodPost, path: "/api/v1/users", body: `{"email":"a@b.c"}`, svc: &fakeService{}, wantCode: http.StatusBadRequest},
 		{name: "create duplicate", method: http.MethodPost, path: "/api/v1/users", body: `{"email":"a@b.c","name":"bob"}`, svc: &fakeService{createErr: domain.ErrUserExists}, wantCode: http.StatusConflict},

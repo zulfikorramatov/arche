@@ -41,7 +41,7 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 		},
 	})
 
-	swagger, err := api.GetSwagger()
+	swagger, err := api.GetSpec()
 	if err != nil {
 		return nil, err
 	}
