@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
+	"go.elastic.co/apm/module/apmhttp/v2"
 	"go.uber.org/zap"
 
 	"github.com/zulfikorramatov/arche/generated/api"
@@ -20,9 +21,10 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(appmiddleware.Logger(log))
-	r.Use(appmiddleware.Recoverer(log))
+	r.Use(appmiddleware.ErrorHandler())
 
 	r.Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		log.Error("pong")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("pong"))
 	})
@@ -57,11 +59,11 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 		},
 	})
 
-	return api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
+	return apmhttp.Wrap(api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
 		BaseURL:     "/api/v1",
 		BaseRouter:  r,
 		Middlewares: []api.MiddlewareFunc{validator},
-	}), nil
+	})), nil
 }
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {

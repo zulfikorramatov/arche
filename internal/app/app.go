@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.elastic.co/apm/v2"
 	"go.uber.org/zap"
 
 	"github.com/zulfikorramatov/arche/internal/config"
@@ -73,6 +74,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+	apm.DefaultTracer().Flush(nil)
 	log.Info("http server stopped")
 	return nil
 }
