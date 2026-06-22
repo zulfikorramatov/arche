@@ -8,14 +8,14 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.elastic.co/apm/module/apmhttp/v2"
-	"go.uber.org/zap"
 
 	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/http/handler"
 	appmiddleware "github.com/zulfikorramatov/arche/internal/http/middleware"
+	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
-func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
+func NewRouter(log *logger.Logger, server *handler.Server) (http.Handler, error) {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.RequestID)
@@ -24,7 +24,6 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 	r.Use(appmiddleware.ErrorHandler())
 
 	r.Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
-		log.Error("pong")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("pong"))
 	})
@@ -38,7 +37,7 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 			writeJSONError(w, http.StatusBadRequest, "invalid request")
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-			log.Error("handler error", zap.Error(err))
+			log.Error("handler error", "error", err)
 			writeJSONError(w, http.StatusInternalServerError, "internal error")
 		},
 	})

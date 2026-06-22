@@ -27,7 +27,7 @@ type Config struct {
 
 type AppConfig struct {
 	Name string `env:"APP_NAME" env-default:"arche"`
-	Env  string `env:"APP_ENV"  env-default:"dev"`
+	Env  string `env:"APP_ENV"  env-default:"local"`
 }
 
 type HTTPConfig struct {
@@ -38,10 +38,7 @@ type HTTPConfig struct {
 }
 
 type LoggerConfig struct {
-	Level        string `env:"LOG_LEVEL"  env-default:"info"`
-	Format       string `env:"LOG_FORMAT" env-default:"json"`
-	APM          bool   `env:"LOG_APM" env-default:"false"`
-	SamplingRate int    `env:"LOG_SAMPLING_RATE" env-default:"100"`
+	Level string `env:"LOG_LEVEL" env-default:"info"`
 }
 
 type PostgresConfig struct {

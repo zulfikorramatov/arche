@@ -12,8 +12,8 @@ require (
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
 	github.com/oapi-codegen/runtime v1.4.2
 	github.com/redis/go-redis/v9 v9.7.0
-	go.elastic.co/apm/module/apmzap/v2 v2.7.12
-	go.uber.org/zap v1.27.0
+	go.elastic.co/apm/module/apmhttp/v2 v2.7.12
+	go.elastic.co/apm/v2 v2.7.12
 )
 
 require (
@@ -42,10 +42,8 @@ require (
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
-	go.elastic.co/apm/module/apmhttp/v2 v2.7.12 // indirect
-	go.elastic.co/apm/v2 v2.7.12 // indirect
+	go.elastic.co/apm/module/apmslog/v2 v2.7.12 // indirect
 	go.elastic.co/fastjson v1.5.1 // indirect
-	go.uber.org/multierr v1.10.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect

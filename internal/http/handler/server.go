@@ -5,10 +5,10 @@ import (
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
-	"go.uber.org/zap"
 
 	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/domain"
+	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
 // Server implements the generated StrictServerInterface. The strict adapter
@@ -23,10 +23,10 @@ type userService interface {
 
 type Server struct {
 	users userService
-	log   *zap.Logger
+	log   *logger.Logger
 }
 
-func NewServer(users userService, log *zap.Logger) *Server {
+func NewServer(users userService, log *logger.Logger) *Server {
 	return &Server{users: users, log: log}
 }
 
