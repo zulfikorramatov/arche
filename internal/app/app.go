@@ -30,7 +30,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer pg.Close()
 
-	rdb, err := redis.New(ctx, redis.Config(cfg.Redis))
+	rdb, err := redis.New(ctx, buildRedisConfig(cfg.Redis))
 	if err != nil {
 		return fmt.Errorf("new redis: %w", err)
 	}
@@ -69,10 +69,40 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer cancel()
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+
 	apm.DefaultTracer().Flush(nil)
 	log.Info("http server stopped")
+
 	return nil
+}
+
+func buildRedisConfig(cfg config.RedisConfig) redis.Config {
+	var sentinelAddrs []string
+	if cfg.SentinelEnabled {
+		port := fmt.Sprintf("%d", cfg.SentinelPort)
+		for _, host := range []string{cfg.SentinelHost1, cfg.SentinelHost2, cfg.SentinelHost3} {
+			if host != "" {
+				sentinelAddrs = append(sentinelAddrs, host+":"+port)
+			}
+		}
+	}
+
+	return redis.Config{
+		Host:               cfg.Host,
+		Port:               cfg.Port,
+		Username:           cfg.Username,
+		Password:           cfg.Password,
+		DB:                 cfg.DB,
+		PoolSize:           cfg.PoolSize,
+		DialTimeout:        cfg.DialTimeout,
+		KeyPrefix:          cfg.KeyPrefix,
+		SentinelEnabled:    cfg.SentinelEnabled,
+		SentinelAddrs:      sentinelAddrs,
+		SentinelMasterName: cfg.SentinelMasterName,
+		SentinelPassword:   cfg.SentinelPassword,
+	}
 }
