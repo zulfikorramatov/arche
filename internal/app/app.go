@@ -99,6 +99,8 @@ func buildRedisConfig(cfg config.RedisConfig) redis.Config {
 		DB:                 cfg.DB,
 		PoolSize:           cfg.PoolSize,
 		DialTimeout:        cfg.DialTimeout,
+		ReadTimeout:        cfg.ReadTimeout,
+		WriteTimeout:       cfg.WriteTimeout,
 		KeyPrefix:          cfg.KeyPrefix,
 		SentinelEnabled:    cfg.SentinelEnabled,
 		SentinelAddrs:      sentinelAddrs,

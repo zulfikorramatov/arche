@@ -20,14 +20,16 @@ type Client = redis.Client
 var Nil = redis.Nil
 
 type Config struct {
-	Host        string
-	Port        int
-	Username    string
-	Password    string
-	DB          int
-	PoolSize    int
-	DialTimeout time.Duration
-	KeyPrefix   string
+	Host         string
+	Port         int
+	Username     string
+	Password     string
+	DB           int
+	PoolSize     int
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	KeyPrefix    string
 
 	SentinelEnabled    bool
 	SentinelAddrs      []string
@@ -47,15 +49,19 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 			DB:            cfg.DB,
 			PoolSize:      cfg.PoolSize,
 			DialTimeout:   cfg.DialTimeout,
+			ReadTimeout:   cfg.ReadTimeout,
+			WriteTimeout:  cfg.WriteTimeout,
 		})
 	} else {
 		client = redis.NewClient(&redis.Options{
-			Addr:        fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-			Username:    cfg.Username,
-			Password:    cfg.Password,
-			DB:          cfg.DB,
-			PoolSize:    cfg.PoolSize,
-			DialTimeout: cfg.DialTimeout,
+			Addr:         fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+			Username:     cfg.Username,
+			Password:     cfg.Password,
+			DB:           cfg.DB,
+			PoolSize:     cfg.PoolSize,
+			DialTimeout:  cfg.DialTimeout,
+			ReadTimeout:  cfg.ReadTimeout,
+			WriteTimeout: cfg.WriteTimeout,
 		})
 	}
 

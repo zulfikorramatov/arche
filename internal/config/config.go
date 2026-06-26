@@ -45,14 +45,16 @@ type PostgresConfig struct {
 }
 
 type RedisConfig struct {
-	Host        string        `env:"REDIS_HOST"         env-default:"localhost"`
-	Port        int           `env:"REDIS_PORT"         env-default:"6379"`
-	Username    string        `env:"REDIS_USERNAME"`
-	Password    string        `env:"REDIS_PASSWORD"`
-	DB          int           `env:"REDIS_DB"           env-default:"0"`
-	PoolSize    int           `env:"REDIS_POOL_SIZE"    env-default:"10"`
-	DialTimeout time.Duration `env:"REDIS_DIAL_TIMEOUT" env-default:"5s"`
-	KeyPrefix   string        `env:"REDIS_CACHE_PREFIX"`
+	Host         string        `env:"REDIS_HOST"          env-default:"localhost"`
+	Port         int           `env:"REDIS_PORT"          env-default:"6379"`
+	Username     string        `env:"REDIS_USERNAME"`
+	Password     string        `env:"REDIS_PASSWORD"`
+	DB           int           `env:"REDIS_DB"            env-default:"0"`
+	PoolSize     int           `env:"REDIS_POOL_SIZE"     env-default:"10"`
+	DialTimeout  time.Duration `env:"REDIS_DIAL_TIMEOUT"  env-default:"1s"`
+	ReadTimeout  time.Duration `env:"REDIS_READ_TIMEOUT"  env-default:"3s"`
+	WriteTimeout time.Duration `env:"REDIS_WRITE_TIMEOUT" env-default:"3s"`
+	KeyPrefix    string        `env:"REDIS_CACHE_PREFIX"`
 
 	SentinelEnabled    bool   `env:"REDIS_SENTINEL_ENABLED"  env-default:"false"`
 	SentinelHost1      string `env:"REDIS_SENTINEL_HOST_1"`
