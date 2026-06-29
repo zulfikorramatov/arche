@@ -26,10 +26,10 @@ type CreateUserJSONRequestBody = CreateUserRequest
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Create a user
-	// (POST /users)
+	// (POST /api/v1/users)
 	CreateUser(w http.ResponseWriter, r *http.Request)
 	// Get a user by ID
-	// (GET /users/{id})
+	// (GET /api/v1/users/{id})
 	GetUserByID(w http.ResponseWriter, r *http.Request, id UserID)
 }
 
@@ -38,13 +38,13 @@ type ServerInterface interface {
 type Unimplemented struct{}
 
 // Create a user
-// (POST /users)
+// (POST /api/v1/users)
 func (_ Unimplemented) CreateUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a user by ID
-// (GET /users/{id})
+// (GET /api/v1/users/{id})
 func (_ Unimplemented) GetUserByID(w http.ResponseWriter, r *http.Request, id UserID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
@@ -212,10 +212,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/users", wrapper.CreateUser)
+		r.Post(options.BaseURL+"/api/v1/users", wrapper.CreateUser)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/users/{id}", wrapper.GetUserByID)
+		r.Get(options.BaseURL+"/api/v1/users/{id}", wrapper.GetUserByID)
 	})
 
 	return r
@@ -324,10 +324,10 @@ func (response GetUserByID404JSONResponse) VisitGetUserByIDResponse(w http.Respo
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Create a user
-	// (POST /users)
+	// (POST /api/v1/users)
 	CreateUser(ctx context.Context, request CreateUserRequestObject) (CreateUserResponseObject, error)
 	// Get a user by ID
-	// (GET /users/{id})
+	// (GET /api/v1/users/{id})
 	GetUserByID(ctx context.Context, request GetUserByIDRequestObject) (GetUserByIDResponseObject, error)
 }
 
@@ -422,16 +422,16 @@ func (sh *strictHandler) GetUserByID(w http.ResponseWriter, r *http.Request, id 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"xFVNT9tAEP0r1rRHJ3YKl/pWSoUi9VBV4oQQWuyJM8jeXWbHEVHk/17t2vkwdouoBNyS8Xy8fe/N7g5y",
-	"U1ujUYuDbAdWsapRkMO/AlekSchod3ftkJeXPkoaMrBK1hCDVjVCBlRADIyPDTEWkAk3GIPL11grX/GZ",
-	"cQUZfEqOw5Luq0sGM66Xl9C27b52BOI7oxL0UH7jY4NOAmY2FlkIQzrWiir/Y2W4VgJZH4mhJv0TdSlr",
-	"yBYxyNZ65E6YdAnt/ii7f6e1p8e8ObQOtbeHbHP/gLn4pqfgfzAbngC8D78wKqS9NCMweHr4pgnaDHvH",
-	"8DQrzawP+pR5KDyJz6i2hjt+vdQZlCTr5n6emzopjSkrTELv9jkChxOHzINwxZ2SAbpCCc6EaoQJQf6u",
-	"5CiVitfb7Kj4qF1ji1eifSZW4HxgjviUgsGEsaS+G+mVCdhIKv9Ncb7G6NuvJcSwQXZk/BYu5uk89YiN",
-	"Ra0sQQZn83R+BnFQLVCfNK5fZ2u6hfHCKE/FsoAMjjvV7zA6uTDFNshmtKAORcraivJQljw4P333Hxs+",
-	"XuB2yJ2/OkLAWaNdZ54v6eJNwIQzt52BXc5kpWPVExb1cnlyz9P0TeZ3F8IEANIbVVER8Z4jj+Hr+2II",
-	"JKiKURXbCJ/IiQs2d01dK94ejBOpqOl4jHurJTsqWo+hxAm7XaF43i+24b45fW9uplEfU5KJ96i9HZkl",
-	"fX+zrEyjP9Yq1I8//wCXaCN7BgYGuULp3RHdb6PD04682evdcAUZJMpSsllAe9v+CQAA//8=",
+	"xFVNT9tAEP0r1rRHJ3YKl/pWSoUi9VBV4oQQWrwTZ1D2g90xwor836tdO8TGbhGVgFsyno+3773Z3UNp",
+	"lDUaNXso9mCFEwoZXfwncUOamIz2N5ce3fo8RElDAVbwFlLQQiEUQBJScHhfk0MJBbsaU/DlFpUIFZ8d",
+	"bqCAT9lxWNZ99dloxuX6HNq2PdROQHx3KBgDlN94X6PniNkZi44JYzoqQbvwY2OcEgxFH0lBkf6JuuIt",
+	"FKsUuLEBuWdHuoL2cJT9v9Pa4TGvnlrH2uunbHN7hyWHpkPwP5wzbgbwIfzCqJj20ozI4PDwdR21GfdO",
+	"4XFRmUUfDCnLWDiIL0hZ4zp+g9QFVMTb+nZZGpVVxlQ7zGLv9jkCjzOHLKNw8kbwCJ0UjAsmhTAjyN+V",
+	"nKSSfL3NjopP2tVWvhLtM7Ei5yNzpEMKRhOmkoZupDcmYiPehW/ClVtMvv1aQwoP6DyZsIWrZb7MA2Jj",
+	"UQtLUMDJMl+eQBpVi9RnwlL2sMpq32+1Nd3eBH1EYGQtoYDjavWrjJ7PjGyiekYz6lgkrN1RGcuyOx9A",
+	"7P9j0ad73I4pDDdIDHhrtO889CVfvQmYeOa287EvHVnuyA2EJb1qgePTPH+T+d29MAOA9IPYkUzcgaOA",
+	"4ev7YogkiJ1DIZsEH8mzj273tVLCNU/GSURSdzymY8dle5JtgFLhjOsukAP9Z028fYavz9U8+GNKNvM6",
+	"tdcTz+Tv75mNqfXHOob68acfYBZt+MDAyCcXyL1Jktsm6R769k8AAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

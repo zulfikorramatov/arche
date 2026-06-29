@@ -36,20 +36,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer func() { _ = rdb.Close() }()
 
-	userRepo := repository.NewUserRepository(pg)
-	userSvc := service.NewUserService(userRepo, rdb)
-	server := handler.NewServer(userSvc, log)
-
-	router, err := httpserver.NewRouter(log, server)
+	srv, err := newHttpServer(cfg, log, pg, rdb)
 	if err != nil {
-		return fmt.Errorf("new router: %w", err)
-	}
-
-	srv := &http.Server{
-		Addr:         cfg.HTTP.Addr,
-		Handler:      router,
-		ReadTimeout:  cfg.HTTP.ReadTimeout,
-		WriteTimeout: cfg.HTTP.WriteTimeout,
+		return fmt.Errorf("new http server: %w", err)
 	}
 
 	errCh := make(chan error, 1)
@@ -78,6 +67,29 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	log.Info("http server stopped")
 
 	return nil
+}
+
+func newHttpServer(
+	cfg *config.Config,
+	log *logger.Logger,
+	pg *postgres.Pool,
+	rdb *redis.Client,
+) (*http.Server, error) {
+	userRepo := repository.NewUserRepository(pg)
+	userSvc := service.NewUserService(userRepo, rdb)
+	server := handler.NewServer(userSvc, log)
+
+	router, err := httpserver.NewRouter(log, server)
+	if err != nil {
+		return nil, fmt.Errorf("new router: %w", err)
+	}
+
+	return &http.Server{
+		Addr:         cfg.HTTP.Addr,
+		Handler:      router,
+		ReadTimeout:  cfg.HTTP.ReadTimeout,
+		WriteTimeout: cfg.HTTP.WriteTimeout,
+	}, nil
 }
 
 func buildRedisConfig(cfg config.RedisConfig) redis.Config {

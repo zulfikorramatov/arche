@@ -11,9 +11,6 @@ import (
 	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
-// Server implements the generated StrictServerInterface. The strict adapter
-// parses requests and serializes responses, so methods here only translate
-// between the generated request/response types and the service layer.
 var _ api.StrictServerInterface = (*Server)(nil)
 
 type userService interface {

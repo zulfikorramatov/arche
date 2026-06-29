@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.elastic.co/apm/module/apmpgxv5/v2"
 )
 
 type Pool = pgxpool.Pool
@@ -43,6 +44,7 @@ func New(ctx context.Context, cfg Config) (*Pool, error) {
 	}
 	poolCfg.MaxConns = cfg.MaxConns
 	poolCfg.MinConns = cfg.MinConns
+	apmpgxv5.Instrument(poolCfg.ConnConfig)
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnTimeout)
 	defer cancel()

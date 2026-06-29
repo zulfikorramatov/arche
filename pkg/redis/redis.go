@@ -1,7 +1,3 @@
-// Package redis wraps go-redis with a Config-driven constructor. The package
-// is independent of the rest of the project: it has no knowledge of env vars
-// or .env files — callers populate Config and pass it in. Client and Nil are
-// re-exported so callers can keep importing only this package.
 package redis
 
 import (
@@ -15,8 +11,6 @@ import (
 
 type Client = redis.Client
 
-// Nil mirrors redis.Nil so callers can compare errors without importing
-// the upstream package.
 var Nil = redis.Nil
 
 type Config struct {

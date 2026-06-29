@@ -2,13 +2,8 @@ openapi: 3.0.3
 info:
   title: arche API
   version: 1.0.0
-# The /api/v1 base path lives here as a relative server URL. The chi wiring
-# registers routes under the same prefix (ChiServerOptions.BaseURL) and the
-# request validator uses this server entry to match incoming paths.
-servers:
-  - url: /api/v1
 paths:
-  /users:
+  /api/v1/users:
     post:
       operationId: createUser
       summary: Create a user
@@ -38,7 +33,7 @@ paths:
               schema:
                 $ref: './definitions.yaml#/components/schemas/Error'
 
-  /users/{id}:
+  /api/v1/users/{id}:
     get:
       operationId: getUserByID
       summary: Get a user by ID
