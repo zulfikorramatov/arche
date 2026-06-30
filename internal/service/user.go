@@ -2,68 +2,44 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/zulfikorramatov/arche/internal/domain"
-	"github.com/zulfikorramatov/arche/pkg/redis"
 )
 
-const userCacheTTL = 5 * time.Minute
-
 type userRepository interface {
-	Create(ctx context.Context, u *domain.User) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	List(ctx context.Context) ([]domain.User, error)
+	FindByUsername(ctx context.Context, username string) (*domain.User, error)
 }
 
 type UserService struct {
-	repo  userRepository
-	cache *redis.Client
+	repo userRepository
 }
 
-func NewUserService(repo userRepository, cache *redis.Client) *UserService {
-	return &UserService{repo: repo, cache: cache}
+func NewUserService(repo userRepository) *UserService {
+	return &UserService{repo: repo}
 }
 
-func (s *UserService) Create(ctx context.Context, email, name string) (*domain.User, error) {
-	now := time.Now().UTC()
-	u := &domain.User{
-		ID:        uuid.New(),
-		Email:     email,
-		Name:      name,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-	if err := s.repo.Create(ctx, u); err != nil {
-		return nil, err
-	}
-	return u, nil
-}
-
-func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
-	key := userCacheKey(id)
-
-	if data, err := s.cache.Get(ctx, key).Bytes(); err == nil {
-		var cached domain.User
-		if json.Unmarshal(data, &cached) == nil {
-			return &cached, nil
-		}
-	}
-
-	u, err := s.repo.GetByID(ctx, id)
+func (s *UserService) List(ctx context.Context) ([]domain.User, error) {
+	users, err := s.repo.List(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list users: %w", err)
 	}
-
-	if data, err := json.Marshal(u); err == nil {
-		_ = s.cache.Set(ctx, key, data, userCacheTTL).Err()
-	}
-	return u, nil
+	return users, nil
 }
 
-func userCacheKey(id uuid.UUID) string {
-	return fmt.Sprintf("user:%s", id)
+func (s *UserService) Authenticate(ctx context.Context, username, password string) (uuid.UUID, error) {
+	user, err := s.repo.FindByUsername(ctx, username)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("find user: %w", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return uuid.Nil, fmt.Errorf("invalid password: %w", err)
+	}
+
+	return user.ID, nil
 }

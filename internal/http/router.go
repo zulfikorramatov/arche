@@ -1,11 +1,13 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.elastic.co/apm/module/apmhttp/v2"
 
@@ -15,12 +17,17 @@ import (
 	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
-func NewRouter(log *logger.Logger, server *handler.Server) (http.Handler, error) {
+type userAuthenticator interface {
+	Authenticate(ctx context.Context, username, password string) (uuid.UUID, error)
+}
+
+func NewRouter(log *logger.Logger, server *handler.Server, auth userAuthenticator) (http.Handler, error) {
 	r := chi.NewMux()
 
 	r.Use(chimiddleware.RequestID)
 	r.Use(appmiddleware.Logger(log))
 	r.Use(appmiddleware.ErrorHandler())
+	r.Use(appmiddleware.BasicAuth(auth))
 
 	strictHandler := api.NewStrictHandlerWithOptions(server, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {

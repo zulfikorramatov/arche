@@ -23,6 +23,11 @@ build: ## Build the binary into $(BIN_DIR)/$(APP_NAME)
 	mkdir -p $(BIN_DIR)
 	go build -ldflags="-s -w" -o $(BIN_DIR)/$(APP_NAME) ./cmd/app
 
+.PHONY: build-cli
+build-cli: ## Build the CLI binary into $(BIN_DIR)/$(APP_NAME)-cli
+	mkdir -p $(BIN_DIR)
+	go build -ldflags="-s -w" -o $(BIN_DIR)/$(APP_NAME)-cli ./cmd/cli
+
 .PHONY: run
 run: ## Run the app locally (loads .env from the project root)
 	go run ./cmd/app

@@ -15,7 +15,6 @@ import (
 	"github.com/zulfikorramatov/arche/internal/service"
 	"github.com/zulfikorramatov/arche/pkg/logger"
 	"github.com/zulfikorramatov/arche/pkg/postgres"
-	"github.com/zulfikorramatov/arche/pkg/redis"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
@@ -30,13 +29,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer pg.Close()
 
-	rdb, err := redis.New(ctx, buildRedisConfig(cfg.Redis))
-	if err != nil {
-		return fmt.Errorf("new redis: %w", err)
-	}
-	defer func() { _ = rdb.Close() }()
+	userRepo := repository.NewUserRepository(pg)
+	userSvc := service.NewUserService(userRepo)
 
-	srv, err := newHttpServer(cfg, log, pg, rdb)
+	srv, err := newHttpServer(cfg, log, userSvc)
 	if err != nil {
 		return fmt.Errorf("new http server: %w", err)
 	}
@@ -72,14 +68,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 func newHttpServer(
 	cfg *config.Config,
 	log *logger.Logger,
-	pg *postgres.Pool,
-	rdb *redis.Client,
+	userSvc *service.UserService,
 ) (*http.Server, error) {
-	userRepo := repository.NewUserRepository(pg)
-	userSvc := service.NewUserService(userRepo, rdb)
-	server := handler.NewServer(userSvc, log)
+	server := handler.NewServer(log, userSvc)
 
-	router, err := httpserver.NewRouter(log, server)
+	router, err := httpserver.NewRouter(log, server, userSvc)
 	if err != nil {
 		return nil, fmt.Errorf("new router: %w", err)
 	}
@@ -90,33 +83,4 @@ func newHttpServer(
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 	}, nil
-}
-
-func buildRedisConfig(cfg config.RedisConfig) redis.Config {
-	var sentinelAddrs []string
-	if cfg.SentinelEnabled {
-		port := fmt.Sprintf("%d", cfg.SentinelPort)
-		for _, host := range []string{cfg.SentinelHost1, cfg.SentinelHost2, cfg.SentinelHost3} {
-			if host != "" {
-				sentinelAddrs = append(sentinelAddrs, host+":"+port)
-			}
-		}
-	}
-
-	return redis.Config{
-		Host:               cfg.Host,
-		Port:               cfg.Port,
-		Username:           cfg.Username,
-		Password:           cfg.Password,
-		DB:                 cfg.DB,
-		PoolSize:           cfg.PoolSize,
-		DialTimeout:        cfg.DialTimeout,
-		ReadTimeout:        cfg.ReadTimeout,
-		WriteTimeout:       cfg.WriteTimeout,
-		KeyPrefix:          cfg.KeyPrefix,
-		SentinelEnabled:    cfg.SentinelEnabled,
-		SentinelAddrs:      sentinelAddrs,
-		SentinelMasterName: cfg.SentinelMasterName,
-		SentinelPassword:   cfg.SentinelPassword,
-	}
 }

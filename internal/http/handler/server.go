@@ -3,9 +3,6 @@ package handler
 import (
 	"context"
 
-	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
-
 	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/domain"
 	"github.com/zulfikorramatov/arche/pkg/logger"
@@ -14,25 +11,33 @@ import (
 var _ api.StrictServerInterface = (*Server)(nil)
 
 type userService interface {
-	Create(ctx context.Context, email, name string) (*domain.User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	List(ctx context.Context) ([]domain.User, error)
 }
 
 type Server struct {
-	users userService
-	log   *logger.Logger
+	log     *logger.Logger
+	userSvc userService
 }
 
-func NewServer(users userService, log *logger.Logger) *Server {
-	return &Server{users: users, log: log}
+func NewServer(log *logger.Logger, userSvc userService) *Server {
+	return &Server{log: log, userSvc: userSvc}
 }
 
-func toAPIUser(u *domain.User) api.User {
-	return api.User{
-		Id:        u.ID,
-		Email:     openapi_types.Email(u.Email),
-		Name:      u.Name,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+func (s *Server) ListUsers(ctx context.Context, _ api.ListUsersRequestObject) (api.ListUsersResponseObject, error) {
+	users, err := s.userSvc.List(ctx)
+	if err != nil {
+		s.log.Error("list users", "error", err)
+		return api.ListUsers500JSONResponse{Error: "internal error"}, nil
 	}
+
+	result := make(api.UserList, 0, len(users))
+	for _, u := range users {
+		result = append(result, api.User{
+			Id:        u.ID,
+			Username:  u.Username,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+
+	return api.ListUsers200JSONResponse(result), nil
 }

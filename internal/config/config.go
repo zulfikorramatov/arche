@@ -17,7 +17,7 @@ type Config struct {
 }
 
 type AppConfig struct {
-	Name string `env:"APP_NAME" env-default:"arche"`
+	Name string `env:"APP_NAME"`
 	Env  string `env:"APP_ENV"  env-default:"local"`
 }
 

@@ -1,26 +1,4 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: arche-app
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      # Override hostnames so .env can keep localhost defaults for `make run`.
-      POSTGRES_HOST: postgres
-      REDIS_HOST: redis
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
   postgres:
     image: postgres:16-alpine
     container_name: arche-postgres
