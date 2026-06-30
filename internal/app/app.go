@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/zulfikorramatov/arche/pkg/redis"
 	"go.elastic.co/apm/v2"
 
 	"github.com/zulfikorramatov/arche/internal/config"
@@ -28,6 +29,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("new postgres: %w", err)
 	}
 	defer pg.Close()
+
+	rdb, err := redis.New(ctx, buildRedisConfig(cfg.Redis))
+	if err != nil {
+		return fmt.Errorf("new redis: %w", err)
+	}
+	defer func() { _ = rdb.Close() }()
 
 	userRepo := repository.NewUserRepository(pg)
 	userSvc := service.NewUserService(userRepo)
@@ -63,6 +70,35 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	log.Info("http server stopped")
 
 	return nil
+}
+
+func buildRedisConfig(cfg config.RedisConfig) redis.Config {
+	var sentinelAddrs []string
+	if cfg.SentinelEnabled {
+		port := fmt.Sprintf("%d", cfg.SentinelPort)
+		for _, host := range []string{cfg.SentinelHost1, cfg.SentinelHost2, cfg.SentinelHost3} {
+			if host != "" {
+				sentinelAddrs = append(sentinelAddrs, host+":"+port)
+			}
+		}
+	}
+
+	return redis.Config{
+		Host:               cfg.Host,
+		Port:               cfg.Port,
+		Username:           cfg.Username,
+		Password:           cfg.Password,
+		DB:                 cfg.DB,
+		PoolSize:           cfg.PoolSize,
+		DialTimeout:        cfg.DialTimeout,
+		ReadTimeout:        cfg.ReadTimeout,
+		WriteTimeout:       cfg.WriteTimeout,
+		KeyPrefix:          cfg.KeyPrefix,
+		SentinelEnabled:    cfg.SentinelEnabled,
+		SentinelAddrs:      sentinelAddrs,
+		SentinelMasterName: cfg.SentinelMasterName,
+		SentinelPassword:   cfg.SentinelPassword,
+	}
 }
 
 func newHttpServer(
