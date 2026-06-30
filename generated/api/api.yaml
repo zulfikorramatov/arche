@@ -1,65 +1,32 @@
 openapi: 3.0.3
 info:
-  title: arche API
+  title: arche
   version: 1.0.0
-# The /api/v1 base path lives here as a relative server URL. The chi wiring
-# registers routes under the same prefix (ChiServerOptions.BaseURL) and the
-# request validator uses this server entry to match incoming paths.
-servers:
-  - url: /api/v1
+  license:
+    name: private
+    url: https://tbcbank.uz
+security:
+  - BasicAuth: [ ]
 paths:
   /users:
-    post:
-      operationId: createUser
-      summary: Create a user
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: './definitions.yaml#/components/schemas/CreateUserRequest'
-      responses:
-        '201':
-          description: user created
-          content:
-            application/json:
-              schema:
-                $ref: './definitions.yaml#/components/schemas/User'
-        '400':
-          description: invalid request
-          content:
-            application/json:
-              schema:
-                $ref: './definitions.yaml#/components/schemas/Error'
-        '409':
-          description: user already exists
-          content:
-            application/json:
-              schema:
-                $ref: './definitions.yaml#/components/schemas/Error'
-
-  /users/{id}:
     get:
-      operationId: getUserByID
-      summary: Get a user by ID
-      parameters:
-        - $ref: './definitions.yaml#/components/parameters/UserID'
+      operationId: ListUsers
+      summary: List all users
       responses:
         '200':
-          description: user found
+          description: OK
           content:
             application/json:
               schema:
-                $ref: './definitions.yaml#/components/schemas/User'
-        '400':
-          description: invalid id
-          content:
-            application/json:
-              schema:
-                $ref: './definitions.yaml#/components/schemas/Error'
-        '404':
-          description: user not found
+                $ref: './definitions.yaml#/components/schemas/UserList'
+        '500':
+          description: Internal Server Error
           content:
             application/json:
               schema:
                 $ref: './definitions.yaml#/components/schemas/Error'
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic

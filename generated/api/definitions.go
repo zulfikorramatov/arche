@@ -7,14 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
-
-// CreateUserRequest defines model for CreateUserRequest.
-type CreateUserRequest struct {
-	Email openapi_types.Email `json:"email"`
-	Name  string              `json:"name"`
-}
 
 // Error defines model for Error.
 type Error struct {
@@ -26,12 +19,10 @@ type UUID = uuid.UUID
 
 // User defines model for User.
 type User struct {
-	CreatedAt time.Time           `json:"created_at"`
-	Email     openapi_types.Email `json:"email"`
-	Id        UUID                `json:"id"`
-	Name      string              `json:"name"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        UUID      `json:"id"`
+	Username  string    `json:"username"`
 }
 
-// UserID defines model for UserID.
-type UserID = UUID
+// UserList defines model for UserList.
+type UserList = []User

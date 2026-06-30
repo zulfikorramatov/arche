@@ -17,35 +17,29 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
-	"github.com/oapi-codegen/runtime"
 )
 
-// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
-type CreateUserJSONRequestBody = CreateUserRequest
+const (
+	BasicAuthScopes basicAuthContextKey = "BasicAuth.Scopes"
+)
+
+// basicAuthContextKey is the context key for BasicAuth security scheme
+type basicAuthContextKey string
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Create a user
-	// (POST /users)
-	CreateUser(w http.ResponseWriter, r *http.Request)
-	// Get a user by ID
-	// (GET /users/{id})
-	GetUserByID(w http.ResponseWriter, r *http.Request, id UserID)
+	// List all users
+	// (GET /users)
+	ListUsers(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
 
-// Create a user
-// (POST /users)
-func (_ Unimplemented) CreateUser(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Get a user by ID
-// (GET /users/{id})
-func (_ Unimplemented) GetUserByID(w http.ResponseWriter, r *http.Request, id UserID) {
+// List all users
+// (GET /users)
+func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -58,37 +52,17 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// CreateUser operation middleware
-func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Request) {
+// ListUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BasicAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateUser(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetUserByID operation middleware
-func (siw *ServerInterfaceWrapper) GetUserByID(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "id" -------------
-	var id UserID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetUserByID(w, r, id)
+		siw.Handler.ListUsers(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -212,76 +186,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/users", wrapper.CreateUser)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/users/{id}", wrapper.GetUserByID)
+		r.Get(options.BaseURL+"/users", wrapper.ListUsers)
 	})
 
 	return r
 }
 
-type CreateUserRequestObject struct {
-	Body *CreateUserJSONRequestBody
+type ListUsersRequestObject struct {
 }
 
-type CreateUserResponseObject interface {
-	VisitCreateUserResponse(w http.ResponseWriter) error
+type ListUsersResponseObject interface {
+	VisitListUsersResponse(w http.ResponseWriter) error
 }
 
-type CreateUser201JSONResponse User
+type ListUsers200JSONResponse UserList
 
-func (response CreateUser201JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateUser400JSONResponse Error
-
-func (response CreateUser400JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateUser409JSONResponse Error
-
-func (response CreateUser409JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetUserByIDRequestObject struct {
-	Id UserID `json:"id"`
-}
-
-type GetUserByIDResponseObject interface {
-	VisitGetUserByIDResponse(w http.ResponseWriter) error
-}
-
-type GetUserByID200JSONResponse User
-
-func (response GetUserByID200JSONResponse) VisitGetUserByIDResponse(w http.ResponseWriter) error {
+func (response ListUsers200JSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -293,42 +213,25 @@ func (response GetUserByID200JSONResponse) VisitGetUserByIDResponse(w http.Respo
 	return err
 }
 
-type GetUserByID400JSONResponse Error
+type ListUsers500JSONResponse Error
 
-func (response GetUserByID400JSONResponse) VisitGetUserByIDResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetUserByID404JSONResponse Error
-
-func (response GetUserByID404JSONResponse) VisitGetUserByIDResponse(w http.ResponseWriter) error {
+func (response ListUsers500JSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Create a user
-	// (POST /users)
-	CreateUser(ctx context.Context, request CreateUserRequestObject) (CreateUserResponseObject, error)
-	// Get a user by ID
-	// (GET /users/{id})
-	GetUserByID(ctx context.Context, request GetUserByIDRequestObject) (GetUserByIDResponseObject, error)
+	// List all users
+	// (GET /users)
+	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -360,56 +263,23 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
-// CreateUser operation middleware
-func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var request CreateUserRequestObject
-
-	var body CreateUserJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
+// ListUsers operation middleware
+func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	var request ListUsersRequestObject
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateUser(ctx, request.(CreateUserRequestObject))
+		return sh.ssi.ListUsers(ctx, request.(ListUsersRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateUser")
+		handler = middleware(handler, "ListUsers")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateUserResponseObject); ok {
-		if err := validResponse.VisitCreateUserResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetUserByID operation middleware
-func (sh *strictHandler) GetUserByID(w http.ResponseWriter, r *http.Request, id UserID) {
-	var request GetUserByIDRequestObject
-
-	request.Id = id
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetUserByID(ctx, request.(GetUserByIDRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetUserByID")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetUserByIDResponseObject); ok {
-		if err := validResponse.VisitGetUserByIDResponse(w); err != nil {
+	} else if validResponse, ok := response.(ListUsersResponseObject); ok {
+		if err := validResponse.VisitListUsersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -422,16 +292,14 @@ func (sh *strictHandler) GetUserByID(w http.ResponseWriter, r *http.Request, id 
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"xFVNT9tAEP0r1rRHJ3YKl/pWSoUi9VBV4oQQWuyJM8jeXWbHEVHk/17t2vkwdouoBNyS8Xy8fe/N7g5y",
-	"U1ujUYuDbAdWsapRkMO/AlekSchod3ftkJeXPkoaMrBK1hCDVjVCBlRADIyPDTEWkAk3GIPL11grX/GZ",
-	"cQUZfEqOw5Luq0sGM66Xl9C27b52BOI7oxL0UH7jY4NOAmY2FlkIQzrWiir/Y2W4VgJZH4mhJv0TdSlr",
-	"yBYxyNZ65E6YdAnt/ii7f6e1p8e8ObQOtbeHbHP/gLn4pqfgfzAbngC8D78wKqS9NCMweHr4pgnaDHvH",
-	"8DQrzawP+pR5KDyJz6i2hjt+vdQZlCTr5n6emzopjSkrTELv9jkChxOHzINwxZ2SAbpCCc6EaoQJQf6u",
-	"5CiVitfb7Kj4qF1ji1eifSZW4HxgjviUgsGEsaS+G+mVCdhIKv9Ncb7G6NuvJcSwQXZk/BYu5uk89YiN",
-	"Ra0sQQZn83R+BnFQLVCfNK5fZ2u6hfHCKE/FsoAMjjvV7zA6uTDFNshmtKAORcraivJQljw4P333Hxs+",
-	"XuB2yJ2/OkLAWaNdZ54v6eJNwIQzt52BXc5kpWPVExb1cnlyz9P0TeZ3F8IEANIbVVER8Z4jj+Hr+2II",
-	"JKiKURXbCJ/IiQs2d01dK94ejBOpqOl4jHurJTsqWo+hxAm7XaF43i+24b45fW9uplEfU5KJ96i9HZkl",
-	"fX+zrEyjP9Yq1I8//wCXaCN7BgYGuULp3RHdb6PD04682evdcAUZJMpSsllAe9v+CQAA//8=",
+	"tJMxb9swEIX/inHtKEtugy7cWrRD0AIdgkyBEdDUWb5UItnjyagb8L8XR8mJnQQIMnQTDu/I9z4+3YML",
+	"QwwevSQw95DcDgdbPlvckieh4NPtN+bAOowcIrIQFgkex3KICAaSMPkOcq6A8fdIjC2Ym1m2ro6ysLlD",
+	"J5Crszuury+/6lnbwIMVMDCO1EL15OwK/iy7sJyHKqnL4sl8SUMMLMWulR0Y6Eh246Z2YWi6ELoem3J2",
+	"fuog4QshHaMVbG+tnLlrreBSaMBnFnMF1Kr2PeMWDLxrHhk3M+DmWfJcwZiQvR3wdaIFzIO8OvX4KuaE",
+	"/INSCUOCQ3qTUyWUH26wzPZQzCV0I5McrnRp4vbFJnKfR32AuVe6stHpI7KdSISsJ5DfBlX25NCnwmBi",
+	"AZFpb0VjjtzPO8k0jWzcxvpf9fi3WCLpJ09up9o9cqLgwcCHelWvVBIiehsJDFzUq/oCqtKPYrZRmOWr",
+	"w4JGG2A19GULBhTYdVHoO6QYfJpCflytSkeCF/Rl0cbYkyurzV1SA8e/6q2gyyvlqaTJMUWZ8vz8rmE+",
+	"/aebp1/9hWsvvWjf+sUV8h55cRRWkMZhsHyYOS1s3y8mnPm0GmBuzkpxs87r/C8AAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

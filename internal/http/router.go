@@ -1,42 +1,40 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
-	"go.uber.org/zap"
+	"go.elastic.co/apm/module/apmhttp/v2"
 
 	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/http/handler"
 	appmiddleware "github.com/zulfikorramatov/arche/internal/http/middleware"
+	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
-func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
-	r := chi.NewRouter()
+type userAuthenticator interface {
+	Authenticate(ctx context.Context, username, password string) (uuid.UUID, error)
+}
+
+func NewRouter(log *logger.Logger, server *handler.Server, auth userAuthenticator) (http.Handler, error) {
+	r := chi.NewMux()
 
 	r.Use(chimiddleware.RequestID)
-	r.Use(chimiddleware.RealIP)
 	r.Use(appmiddleware.Logger(log))
-	r.Use(appmiddleware.Recoverer(log))
+	r.Use(appmiddleware.ErrorHandler())
+	r.Use(appmiddleware.BasicAuth(auth))
 
-	r.Get("/ping", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("pong"))
-	})
-
-	// strictHandler adapts the typed StrictServerInterface to the low-level
-	// chi handlers. The error funcs cover the cases the typed handlers can't
-	// express: a body that fails to decode (400) and an error returned from a
-	// handler (500).
 	strictHandler := api.NewStrictHandlerWithOptions(server, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
 			writeJSONError(w, http.StatusBadRequest, "invalid request")
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
-			log.Error("handler error", zap.Error(err))
+			log.Error("handler error", "error", err)
 			writeJSONError(w, http.StatusInternalServerError, "internal error")
 		},
 	})
@@ -46,10 +44,6 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 		return nil, err
 	}
 
-	// The validator rejects requests that don't match the embedded spec
-	// (missing params, malformed body, wrong content-type) before they reach a
-	// handler. Servers stays set so the /api/v1 base path matches; the URL is
-	// relative, so there is no real host check to silence beyond the warning.
 	validator := nethttpmiddleware.OapiRequestValidatorWithOptions(swagger, &nethttpmiddleware.Options{
 		SilenceServersWarning: true,
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
@@ -57,11 +51,10 @@ func NewRouter(log *zap.Logger, server *handler.Server) (http.Handler, error) {
 		},
 	})
 
-	return api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
-		BaseURL:     "/api/v1",
+	return apmhttp.Wrap(api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
 		BaseRouter:  r,
 		Middlewares: []api.MiddlewareFunc{validator},
-	}), nil
+	})), nil
 }
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {

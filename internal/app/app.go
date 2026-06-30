@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.uber.org/zap"
+	"github.com/zulfikorramatov/arche/pkg/redis"
+	"go.elastic.co/apm/v2"
 
 	"github.com/zulfikorramatov/arche/internal/config"
 	httpserver "github.com/zulfikorramatov/arche/internal/http"
@@ -15,7 +16,6 @@ import (
 	"github.com/zulfikorramatov/arche/internal/service"
 	"github.com/zulfikorramatov/arche/pkg/logger"
 	"github.com/zulfikorramatov/arche/pkg/postgres"
-	"github.com/zulfikorramatov/arche/pkg/redis"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
@@ -23,7 +23,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("new logger: %w", err)
 	}
-	defer func() { _ = log.Sync() }()
 
 	pg, err := postgres.New(ctx, postgres.Config(cfg.Postgres))
 	if err != nil {
@@ -31,31 +30,23 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer pg.Close()
 
-	rdb, err := redis.New(ctx, redis.Config(cfg.Redis))
+	rdb, err := redis.New(ctx, buildRedisConfig(cfg.Redis))
 	if err != nil {
 		return fmt.Errorf("new redis: %w", err)
 	}
 	defer func() { _ = rdb.Close() }()
 
 	userRepo := repository.NewUserRepository(pg)
-	userSvc := service.NewUserService(userRepo, rdb)
-	server := handler.NewServer(userSvc, log)
+	userSvc := service.NewUserService(userRepo)
 
-	router, err := httpserver.NewRouter(log, server)
+	srv, err := newHttpServer(cfg, log, userSvc)
 	if err != nil {
-		return fmt.Errorf("new router: %w", err)
-	}
-
-	srv := &http.Server{
-		Addr:         cfg.HTTP.Addr,
-		Handler:      router,
-		ReadTimeout:  cfg.HTTP.ReadTimeout,
-		WriteTimeout: cfg.HTTP.WriteTimeout,
+		return fmt.Errorf("new http server: %w", err)
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("http server starting", zap.String("addr", cfg.HTTP.Addr))
+		log.Info("http server starting", "addr", cfg.HTTP.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -65,14 +56,67 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	case <-ctx.Done():
 		log.Info("shutdown signal received")
 	case err := <-errCh:
-		log.Error("http server error", zap.Error(err))
+		log.Error("http server error", "error", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer cancel()
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+
+	apm.DefaultTracer().Flush(nil)
 	log.Info("http server stopped")
+
 	return nil
+}
+
+func buildRedisConfig(cfg config.RedisConfig) redis.Config {
+	var sentinelAddrs []string
+	if cfg.SentinelEnabled {
+		port := fmt.Sprintf("%d", cfg.SentinelPort)
+		for _, host := range []string{cfg.SentinelHost1, cfg.SentinelHost2, cfg.SentinelHost3} {
+			if host != "" {
+				sentinelAddrs = append(sentinelAddrs, host+":"+port)
+			}
+		}
+	}
+
+	return redis.Config{
+		Host:               cfg.Host,
+		Port:               cfg.Port,
+		Username:           cfg.Username,
+		Password:           cfg.Password,
+		DB:                 cfg.DB,
+		PoolSize:           cfg.PoolSize,
+		DialTimeout:        cfg.DialTimeout,
+		ReadTimeout:        cfg.ReadTimeout,
+		WriteTimeout:       cfg.WriteTimeout,
+		KeyPrefix:          cfg.KeyPrefix,
+		SentinelEnabled:    cfg.SentinelEnabled,
+		SentinelAddrs:      sentinelAddrs,
+		SentinelMasterName: cfg.SentinelMasterName,
+		SentinelPassword:   cfg.SentinelPassword,
+	}
+}
+
+func newHttpServer(
+	cfg *config.Config,
+	log *logger.Logger,
+	userSvc *service.UserService,
+) (*http.Server, error) {
+	server := handler.NewServer(log, userSvc)
+
+	router, err := httpserver.NewRouter(log, server, userSvc)
+	if err != nil {
+		return nil, fmt.Errorf("new router: %w", err)
+	}
+
+	return &http.Server{
+		Addr:         cfg.HTTP.Addr,
+		Handler:      router,
+		ReadTimeout:  cfg.HTTP.ReadTimeout,
+		WriteTimeout: cfg.HTTP.WriteTimeout,
+	}, nil
 }

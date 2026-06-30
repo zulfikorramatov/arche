@@ -1,8 +1,3 @@
-// Package postgres wraps pgx/v5 pool creation behind a Config-driven
-// constructor. The package is independent of the rest of the project: it has
-// no knowledge of env vars or .env files — callers populate Config and pass
-// it in. Pool is a type alias over *pgxpool.Pool so callers can keep
-// importing this package only.
 package postgres
 
 import (
@@ -12,10 +7,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.elastic.co/apm/module/apmpgxv5/v2"
 )
 
-// Pool aliases pgxpool.Pool so consumers don't need to import pgx directly
-// just to type a field.
 type Pool = pgxpool.Pool
 
 type Config struct {
@@ -50,6 +44,7 @@ func New(ctx context.Context, cfg Config) (*Pool, error) {
 	}
 	poolCfg.MaxConns = cfg.MaxConns
 	poolCfg.MinConns = cfg.MinConns
+	apmpgxv5.Instrument(poolCfg.ConnConfig)
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnTimeout)
 	defer cancel()
