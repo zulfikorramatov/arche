@@ -15,6 +15,7 @@ require (
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/segmentio/kafka-go v0.4.51
 	github.com/spf13/cobra v1.10.2
+	github.com/twmb/franz-go v1.21.4
 	go.elastic.co/apm/module/apmhttp/v2 v2.7.12
 	go.elastic.co/apm/module/apmpgxv5/v2 v2.7.12
 	go.elastic.co/apm/module/apmslog/v2 v2.7.12
@@ -39,11 +40,11 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
-	github.com/klauspost/compress v1.15.9 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/oapi-codegen/oapi-codegen/v2 v2.7.1 // indirect
 	github.com/oasdiff/yaml v0.1.0 // indirect
 	github.com/oasdiff/yaml3 v0.0.13 // indirect
-	github.com/pierrec/lz4/v4 v4.1.15 // indirect
+	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190425082905-87a4384529e0 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
@@ -51,6 +52,7 @@ require (
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.19.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/twmb/franz-go/pkg/kmsg v1.13.1 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect

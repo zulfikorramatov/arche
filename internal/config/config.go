@@ -14,6 +14,7 @@ type Config struct {
 	Logger   LoggerConfig
 	Postgres PostgresConfig
 	Redis    RedisConfig
+	Kafka    KafkaConfig
 }
 
 type AppConfig struct {
@@ -63,6 +64,17 @@ type RedisConfig struct {
 	SentinelPort       int    `env:"REDIS_SENTINEL_PORT"     env-default:"26379"`
 	SentinelMasterName string `env:"REDIS_SENTINEL_SERVICE"  env-default:"mymaster"`
 	SentinelPassword   string `env:"REDIS_SENTINEL_PASSWORD"`
+}
+
+type KafkaConfig struct {
+	Brokers      []string      `env:"KAFKA_BROKERS"       env-separator:"," env-default:"localhost:19092"`
+	GroupID      string        `env:"KAFKA_GROUP_ID"      env-default:"arche"`
+	Topics       []string      `env:"KAFKA_TOPICS"        env-separator:"," env-default:"arche.example"`
+	DialTimeout  time.Duration `env:"KAFKA_DIAL_TIMEOUT"  env-default:"10s"`
+	Username     string        `env:"KAFKA_USERNAME"`
+	Password     string        `env:"KAFKA_PASSWORD"`
+	MaxRetries   int           `env:"KAFKA_MAX_RETRIES"   env-default:"3"`
+	RetryBackoff time.Duration `env:"KAFKA_RETRY_BACKOFF" env-default:"2s"`
 }
 
 func Load() (*Config, error) {
