@@ -7,15 +7,13 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// Producer is a durable Kafka producer. Records are written with acks=all and
-// idempotency enabled (no duplicates on retry), and Produce is synchronous:
-// the caller gets an error unless the broker confirms the write.
 type Producer struct {
 	client *kgo.Client
 }
 
 func NewProducer(ctx context.Context, cfg Config) (*Producer, error) {
-	opts := append(clientOpts(cfg),
+	opts := append(
+		clientOpts(cfg),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.AllowAutoTopicCreation(),
 	)
@@ -27,6 +25,7 @@ func NewProducer(ctx context.Context, cfg Config) (*Producer, error) {
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
 	defer cancel()
+
 	if err := client.Ping(pingCtx); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("ping: %w", err)
