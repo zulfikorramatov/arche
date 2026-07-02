@@ -7,12 +7,12 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/zulfikorramatov/arche/internal/domain"
+	"github.com/zulfikorramatov/arche/internal/entity"
 )
 
 type userRepository interface {
-	List(ctx context.Context) ([]domain.User, error)
-	FindByUsername(ctx context.Context, username string) (*domain.User, error)
+	List(ctx context.Context) ([]entity.User, error)
+	FindByUsername(ctx context.Context, username string) (*entity.User, error)
 }
 
 type UserService struct {
@@ -23,7 +23,7 @@ func NewUserService(repo userRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-func (s *UserService) List(ctx context.Context) ([]domain.User, error) {
+func (s *UserService) List(ctx context.Context) ([]entity.User, error) {
 	users, err := s.repo.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)

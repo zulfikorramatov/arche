@@ -36,7 +36,7 @@ import (
     "github.com/go-chi/chi/v5"  // 2. external
     "github.com/google/uuid"
 
-    "github.com/zulfikorramatov/arche/internal/domain"  // 3. internal
+    "github.com/zulfikorramatov/arche/internal/entity"  // 3. internal
 )
 ```
 

@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
-	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.elastic.co/apm/module/apmhttp/v2"
 
 	"github.com/zulfikorramatov/arche/generated/api"
@@ -22,14 +20,11 @@ type userAuthenticator interface {
 	Authenticate(ctx context.Context, username, password string) (uuid.UUID, error)
 }
 
-func NewRouter(log *logger.Logger, server *handler.Server, auth userAuthenticator) (http.Handler, error) {
-	r := chi.NewMux()
-
-	r.Use(chimiddleware.RequestID)
-	r.Use(appmiddleware.Logger(log))
-	r.Use(appmiddleware.ErrorHandler())
-	r.Use(appmiddleware.BasicAuth(auth))
-
+func NewRouter(
+	log *logger.Logger,
+	server *handler.Server,
+	auth userAuthenticator,
+) (http.Handler, error) {
 	strictHandler := api.NewStrictHandlerWithOptions(server, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
 			writeJSONError(w, http.StatusBadRequest, "invalid request")
@@ -45,19 +40,14 @@ func NewRouter(log *logger.Logger, server *handler.Server, auth userAuthenticato
 		return nil, err
 	}
 
-	validator := nethttpmiddleware.OapiRequestValidatorWithOptions(swagger, &nethttpmiddleware.Options{
-		SilenceServersWarning: true,
-		Options: openapi3filter.Options{
-			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
-		},
-		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
-			writeJSONError(w, statusCode, message)
-		},
-	})
-
 	return apmhttp.Wrap(api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
-		BaseRouter:  r,
-		Middlewares: []api.MiddlewareFunc{validator},
+		BaseRouter: chi.NewMux(),
+		Middlewares: []api.MiddlewareFunc{
+			appmiddleware.RequestValidator(swagger, auth),
+			chimiddleware.RequestID,
+			appmiddleware.Logger(log),
+			appmiddleware.ErrorHandler(),
+		},
 	})), nil
 }
 

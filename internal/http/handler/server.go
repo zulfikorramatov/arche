@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/zulfikorramatov/arche/generated/api"
-	"github.com/zulfikorramatov/arche/internal/domain"
+	"github.com/zulfikorramatov/arche/internal/entity"
 	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
 var _ api.StrictServerInterface = (*Server)(nil)
 
 type userService interface {
-	List(ctx context.Context) ([]domain.User, error)
+	List(ctx context.Context) ([]entity.User, error)
 }
 
 type Server struct {
