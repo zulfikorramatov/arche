@@ -34,15 +34,17 @@ type LoggerConfig struct {
 }
 
 type PostgresConfig struct {
-	Host        string        `env:"POSTGRES_HOST"         env-default:"localhost"`
-	Port        int           `env:"POSTGRES_PORT"         env-default:"5432"`
-	User        string        `env:"POSTGRES_USER"         env-default:"postgres"`
+	Host        string        `env:"POSTGRES_HOST"          env-default:"localhost"`
+	Port        int           `env:"POSTGRES_PORT"          env-default:"5432"`
+	User        string        `env:"POSTGRES_USER"          env-default:"postgres"`
 	Password    string        `env:"POSTGRES_PASSWORD"`
-	Database    string        `env:"POSTGRES_DB"           env-default:"app"`
-	SSLMode     string        `env:"POSTGRES_SSL_MODE"     env-default:"disable"`
-	MaxConns    int32         `env:"POSTGRES_MAX_CONNS"    env-default:"10"`
-	MinConns    int32         `env:"POSTGRES_MIN_CONNS"    env-default:"1"`
-	ConnTimeout time.Duration `env:"POSTGRES_CONN_TIMEOUT" env-default:"5s"`
+	Database    string        `env:"POSTGRES_DB"            env-default:"app"`
+	SSLMode     string        `env:"POSTGRES_SSL_MODE"      env-default:"disable"`
+	MaxConns    int32         `env:"POSTGRES_MAX_CONNS"     env-default:"10"`
+	MinConns    int32         `env:"POSTGRES_MIN_CONNS"     env-default:"1"`
+	ConnTimeout time.Duration `env:"POSTGRES_CONN_TIMEOUT"  env-default:"5s"`
+	RetryDelay  time.Duration `env:"POSTGRES_RETRY_DELAY"   env-default:"5s"`
+	MaxAttempts int           `env:"POSTGRES_MAX_ATTEMPTS"  env-default:"5"`
 }
 
 type RedisConfig struct {

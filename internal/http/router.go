@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
@@ -46,6 +47,9 @@ func NewRouter(log *logger.Logger, server *handler.Server, auth userAuthenticato
 
 	validator := nethttpmiddleware.OapiRequestValidatorWithOptions(swagger, &nethttpmiddleware.Options{
 		SilenceServersWarning: true,
+		Options: openapi3filter.Options{
+			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		},
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
 			writeJSONError(w, statusCode, message)
 		},

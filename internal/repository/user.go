@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zulfikorramatov/arche/internal/domain"
+	"github.com/zulfikorramatov/arche/pkg/postgres"
 )
 
 type UserRepository struct {
-	pool *pgxpool.Pool
+	pool *postgres.Pool
 }
 
-func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
+func NewUserRepository(pool *postgres.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
