@@ -53,10 +53,6 @@ up: ## Start the docker-compose stack
 down: ## Stop the docker-compose stack
 	docker compose down
 
-.PHONY: logs
-logs: ## Tail app logs
-	docker compose logs -f app
-
 .PHONY: migrate-up
 migrate-up: ## Apply all migrations up
 	migrate -path $(MIGRATIONS_DIR) -database "$(POSTGRES_DSN)" up

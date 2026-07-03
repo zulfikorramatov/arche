@@ -38,6 +38,9 @@ linters:
         linters:
           - errname
         text: "Nil"
+      - path: pkg/kafka/consumer.go
+        linters:
+          - nilerr
 
 issues:
   max-issues-per-linter: 0

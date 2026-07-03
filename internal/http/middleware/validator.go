@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -12,6 +11,7 @@ import (
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 
 	"github.com/zulfikorramatov/arche/generated/api"
+	"github.com/zulfikorramatov/arche/internal/http/response"
 )
 
 type userAuthenticator interface {
@@ -34,9 +34,7 @@ func RequestValidator(swagger *openapi3.T, auth userAuthenticator) api.Middlewar
 			},
 		},
 		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(statusCode)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+			response.Error(w, statusCode, message)
 		},
 	})
 }

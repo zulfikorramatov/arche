@@ -52,10 +52,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}()
 
+	var runErr error
 	select {
 	case <-ctx.Done():
 		log.Info("shutdown signal received")
 	case err := <-errCh:
+		runErr = err
 		log.Error("http server error", "error", err)
 	}
 
@@ -69,7 +71,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	apm.DefaultTracer().Flush(nil)
 	log.Info("http server stopped")
 
-	return nil
+	return runErr
 }
 
 func buildRedisConfig(cfg config.RedisConfig) redis.Config {

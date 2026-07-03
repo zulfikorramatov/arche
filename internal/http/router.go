@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +12,7 @@ import (
 	"github.com/zulfikorramatov/arche/generated/api"
 	"github.com/zulfikorramatov/arche/internal/http/handler"
 	appmiddleware "github.com/zulfikorramatov/arche/internal/http/middleware"
+	"github.com/zulfikorramatov/arche/internal/http/response"
 	"github.com/zulfikorramatov/arche/pkg/logger"
 )
 
@@ -27,11 +27,11 @@ func NewRouter(
 ) (http.Handler, error) {
 	strictHandler := api.NewStrictHandlerWithOptions(server, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
-			writeJSONError(w, http.StatusBadRequest, "invalid request")
+			response.Error(w, http.StatusBadRequest, "invalid request")
 		},
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			log.Error("handler error", "error", err)
-			writeJSONError(w, http.StatusInternalServerError, "internal error")
+			response.Error(w, http.StatusInternalServerError, "internal error")
 		},
 	})
 
@@ -43,16 +43,9 @@ func NewRouter(
 	return apmhttp.Wrap(api.HandlerWithOptions(strictHandler, api.ChiServerOptions{
 		BaseRouter: chi.NewMux(),
 		Middlewares: []api.MiddlewareFunc{
-			appmiddleware.RequestValidator(swagger, auth),
-			chimiddleware.RequestID,
 			appmiddleware.Logger(log),
-			appmiddleware.ErrorHandler(),
+			chimiddleware.RequestID,
+			appmiddleware.RequestValidator(swagger, auth),
 		},
 	})), nil
-}
-
-func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
