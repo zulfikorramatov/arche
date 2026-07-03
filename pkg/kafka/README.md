@@ -111,13 +111,10 @@ err = consumer.Run(ctx, func(ctx context.Context, msg kafka.Message) error {
 Consumer стартует в `app.go` только если задан хотя бы один топик. Оставьте `KAFKA_TOPICS` пустым —
 consumer не запустится (producer при этом доступен).
 
-## Локальный запуск
+## Подключение к брокеру
 
-В `docker-compose.yml` поднят брокер [Redpanda](https://redpanda.com) (Kafka-совместимый, без
-ZooKeeper). Слушатели:
-
-- внутри docker-сети — `redpanda:9092`;
-- с хоста — `localhost:19092` (используется при `make run`, см. `.env.example`).
+Задайте адрес внешнего (или managed) Kafka-совместимого брокера в `KAFKA_BROKERS` (см. `.env.example`).
+При необходимости укажите `KAFKA_USERNAME`/`KAFKA_PASSWORD` для SASL/SCRAM-SHA-512.
 
 ## Чего здесь нет (и почему)
 

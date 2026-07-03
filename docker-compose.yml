@@ -31,29 +31,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redpanda:
-    image: redpandadata/redpanda:v24.2.7
-    container_name: arche-redpanda
-    restart: unless-stopped
-    command:
-      - redpanda
-      - start
-      - --smp=1
-      - --overprovisioned
-      - --node-id=0
-      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
-    ports:
-      - "19092:19092"
-      - "9644:9644"
-    volumes:
-      - redpanda-data:/var/lib/redpanda/data
-    healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   migrate:
     image: migrate/migrate:v4.17.1
     container_name: arche-migrate
@@ -70,4 +47,3 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  redpanda-data:
