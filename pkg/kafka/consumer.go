@@ -27,7 +27,8 @@ type Consumer struct {
 }
 
 func NewConsumer(ctx context.Context, cfg Config) (*Consumer, error) {
-	opts := append(clientOpts(cfg),
+	opts := append(
+		clientOpts(cfg),
 		kgo.ConsumerGroup(cfg.GroupID),
 		kgo.ConsumeTopics(cfg.Topics...),
 		kgo.DisableAutoCommit(),
@@ -40,6 +41,7 @@ func NewConsumer(ctx context.Context, cfg Config) (*Consumer, error) {
 
 	pingCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
 	defer cancel()
+
 	if err := client.Ping(pingCtx); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("ping: %w", err)
@@ -53,7 +55,7 @@ func NewConsumer(ctx context.Context, cfg Config) (*Consumer, error) {
 	return &Consumer{client: client, maxRetries: cfg.MaxRetries, retryBackoff: backoff}, nil
 }
 
-// Run polls and dispatches messages until ctx is cancelled (clean shutdown,
+// Run polls and dispatches messages until ctx is canceled (clean shutdown,
 // returns nil). Each record is committed only after the handler succeeds. A
 // message that still fails after MaxRetries — or an unrecoverable client/poll
 // error — is returned as a fatal error so the caller can fail the pod and let
@@ -82,7 +84,7 @@ func (c *Consumer) Run(ctx context.Context, handler Handler) error {
 
 			if err := c.handle(ctx, handler, msg); err != nil {
 				if ctx.Err() != nil {
-					return nil // cancelled mid-retry: clean shutdown, not fatal
+					return nil // canceled mid-retry: clean shutdown, not fatal
 				}
 				_ = c.commit(ctx, processed) // best-effort: don't reprocess what already succeeded
 				return fmt.Errorf("handle message: %w", err)

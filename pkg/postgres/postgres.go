@@ -22,6 +22,8 @@ type Config struct {
 	MaxConns    int32
 	MinConns    int32
 	ConnTimeout time.Duration
+	RetryDelay  time.Duration
+	MaxAttempts int
 }
 
 func (c Config) DSN() string {
@@ -38,15 +40,45 @@ func (c Config) DSN() string {
 }
 
 func New(ctx context.Context, cfg Config) (*Pool, error) {
+	if cfg.MaxAttempts < 1 {
+		cfg.MaxAttempts = 1
+	}
+
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("parse pool config: %w", err)
 	}
-	poolCfg.MaxConns = cfg.MaxConns
-	poolCfg.MinConns = cfg.MinConns
+	if cfg.MaxConns > 0 {
+		poolCfg.MaxConns = cfg.MaxConns
+	}
+	if cfg.MinConns > 0 {
+		poolCfg.MinConns = cfg.MinConns
+	}
 	apmpgxv5.Instrument(poolCfg.ConnConfig)
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.ConnTimeout)
+	var pool *Pool
+	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
+		pool, err = connect(ctx, poolCfg, cfg.ConnTimeout)
+		if err == nil {
+			return pool, nil
+		}
+
+		if attempt == cfg.MaxAttempts {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("connect postgres: %w", ctx.Err())
+		case <-time.After(cfg.RetryDelay):
+		}
+	}
+
+	return nil, fmt.Errorf("connect postgres after %d attempts: %w", cfg.MaxAttempts, err)
+}
+
+func connect(ctx context.Context, poolCfg *pgxpool.Config, timeout time.Duration) (*Pool, error) {
+	pingCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	pool, err := pgxpool.NewWithConfig(pingCtx, poolCfg)
@@ -57,5 +89,6 @@ func New(ctx context.Context, cfg Config) (*Pool, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping: %w", err)
 	}
+
 	return pool, nil
 }

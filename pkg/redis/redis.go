@@ -19,11 +19,13 @@ type Config struct {
 	Username     string
 	Password     string
 	DB           int
+	KeyPrefix    string
 	PoolSize     int
 	DialTimeout  time.Duration
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
-	KeyPrefix    string
+	RetryDelay   time.Duration
+	MaxAttempts  int
 
 	SentinelEnabled    bool
 	SentinelAddrs      []string
@@ -32,8 +34,11 @@ type Config struct {
 }
 
 func New(ctx context.Context, cfg Config) (*Client, error) {
-	var client *redis.Client
+	if cfg.MaxAttempts < 1 {
+		cfg.MaxAttempts = 1
+	}
 
+	var client *redis.Client
 	if cfg.SentinelEnabled {
 		client = redis.NewFailoverClient(&redis.FailoverOptions{
 			MasterName:    cfg.SentinelMasterName,
@@ -63,13 +68,36 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		client.AddHook(redisprefix.NewKeyPrefixHook(cfg.KeyPrefix))
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
-	defer cancel()
+	var err error
+	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
+		err = ping(ctx, client, cfg.DialTimeout)
+		if err == nil {
+			return client, nil
+		}
 
-	if err := client.Ping(pingCtx).Err(); err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("ping: %w", err)
+		if attempt == cfg.MaxAttempts {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			_ = client.Close()
+			return nil, fmt.Errorf("connect redis: %w", ctx.Err())
+		case <-time.After(cfg.RetryDelay):
+		}
 	}
 
-	return client, nil
+	_ = client.Close()
+	return nil, fmt.Errorf("connect redis after %d attempts: %w", cfg.MaxAttempts, err)
+}
+
+func ping(ctx context.Context, client *redis.Client, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("ping: %w", err)
+	}
+
+	return nil
 }

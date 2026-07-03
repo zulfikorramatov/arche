@@ -1,15 +1,18 @@
 # arche
 
 Шаблон для Go-микросервисов. Использует [chi](https://github.com/go-chi/chi),
-[zap](https://github.com/uber-go/zap), [pgx](https://github.com/jackc/pgx)
-и [go-redis](https://github.com/redis/go-redis), связанные через
+[slog](https://pkg.go.dev/log/slog) (+ [Elastic APM](https://www.elastic.co/apm)),
+[pgx](https://github.com/jackc/pgx), [go-redis](https://github.com/redis/go-redis)
+и [franz-go](https://github.com/twmb/franz-go) (Kafka/Redpanda), связанные через
 конфиг-ориентированный `internal/app`.
 
 ## Структура проекта
 
 ```
 .
-├── cmd/app/            # main.go — загрузка конфига, signal context, вызов app.Run
+├── cmd/
+│   ├── app/            # main.go — загрузка конфига, signal context, вызов app.Run
+│   └── cli/            # CLI-утилита (cobra): управление данными (user create/delete и т.д.)
 ├── generated/api/      # spec-first HTTP контракт: OpenAPI spec + сгенерированный код
 │   ├── definitions.yaml/.go  # общие schemas/parameters (x-go-type маппинг)
 │   ├── api.yaml              # paths/operations
@@ -20,14 +23,18 @@
 │   ├── domain/         # сущности и доменные ошибки
 │   ├── repository/     # postgres-репозитории
 │   ├── service/        # бизнес-логика, использует repo + cache
-│   └── http/           # роутер (strict adapter + OpenAPI validator), реализация StrictServerInterface
+│   └── http/           # роутер (strict adapter + OpenAPI validator)
+│       ├── handler/    #   реализация StrictServerInterface
+│       └── middleware/ #   BasicAuth, Logger, ErrorHandler
 ├── pkg/                # переиспользуемые библиотеки — plain Config, без env-тегов
-│   ├── logger/         #   обёртка над zap
+│   ├── kafka/          #   producer + consumer (franz-go, Redpanda/Kafka)
+│   ├── logger/         #   обёртка над log/slog с Elastic APM
+│   ├── money/          #   value-тип для валюты (UZS: суммы ↔ тийины, JSON/SQL)
 │   ├── postgres/       #   pgx pool
-│   └── redis/          #   go-redis клиент
+│   └── redis/          #   go-redis клиент (поддержка Sentinel)
 ├── migrations/         # SQL-миграции (golang-migrate)
 ├── .env.example        # единый источник runtime-конфигурации
-├── docker-compose.yml  # app + postgres + redis + migrate
+├── docker-compose.yml  # postgres + redis + redpanda + migrate
 ├── Dockerfile          # multi-stage сборка, Go 1.25
 └── Makefile
 ```
@@ -37,7 +44,7 @@
 | Зависимость | Версия | Назначение |
 |-------------|--------|------------|
 | [Go](https://go.dev/dl/) | 1.25+ | компиляция и запуск |
-| [Docker](https://docs.docker.com/get-docker/) + Compose | — | контейнеры для postgres, redis, app |
+| [Docker](https://docs.docker.com/get-docker/) + Compose | — | контейнеры для postgres, redis, redpanda, migrate |
 | [golangci-lint](https://golangci-lint.run/welcome/install/) | 2.x | линтинг (`make lint`) |
 | [golang-migrate](https://github.com/golang-migrate/migrate) | 4.x | миграции БД (`make migrate-*`) |
 
@@ -45,38 +52,21 @@
 
 ```sh
 cp .env.example .env
-make up           # собрать и запустить app + postgres + redis + миграции
-curl localhost:8080/ping        # -> pong
+make up           # поднять инфраструктуру: postgres + redis + redpanda + миграции
+make migrate-up   # запустить миграции
+make run          # запустить приложение (загружает .env)
+curl localhost:8080/users   # → [] (Basic Auth: см. .env)
 ```
 
-Локальная разработка без контейнеров для приложения:
+### CLI-утилита
+
+CLI (`cmd/cli`) — инструмент на [cobra](https://github.com/spf13/cobra),
+использует тот же конфиг (`.env`) и подключается к postgres напрямую.
 
 ```sh
-make tidy
-docker compose up -d postgres redis
-make migrate-up
-make run          # загружает .env из корня проекта
+go run ./cmd/cli user create --username admin --password secret
+go run ./cmd/cli user delete --username admin
 ```
-
-## Make-команды
-
-| Команда | Описание |
-|---------|----------|
-| `make help` | Показать список всех целей |
-| `make generate` | Сгенерировать код сервера из OpenAPI спеки |
-| `make tidy` | `go mod tidy` |
-| `make build` | Собрать бинарник в `bin/arche` |
-| `make run` | Запустить локально (читает `.env`) |
-| `make test` | Тесты с race detector |
-| `make lint` | Запуск golangci-lint |
-| `make fmt` | Форматирование + `go vet` |
-| `make up` | Запуск docker-compose стека |
-| `make down` | Остановка docker-compose стека |
-| `make logs` | Логи приложения в реальном времени |
-| `make migrate-up` | Применить все миграции |
-| `make migrate-down` | Откатить одну миграцию |
-| `make migrate-new name=add_xxx` | Создать новую миграцию |
-| `make clean` | Удалить `bin/` |
 
 ## Архитектура
 
@@ -90,8 +80,9 @@ HTTP-запрос
 generated/api/gen.go            сгенерированный роутер + OpenAPI-валидатор
    │                            (отклоняет некорректный запрос ДО хендлера)
    ▼
-internal/http/router.go         chi: middleware (RequestID, RealIP, Logger,
-   │                            Recoverer) + strict adapter + validator
+internal/http/router.go         chi: middleware (RequestID, Logger,
+   │                            ErrorHandler, BasicAuth) + strict adapter +
+   │                            validator + apmhttp.Wrap (Elastic APM)
    ▼
 internal/http/handler           реализация api.StrictServerInterface:
    │                            получает типизированный *RequestObject,
@@ -107,13 +98,17 @@ internal/repository             raw SQL через pgx; мапит ошибки 
 internal/domain                 сущности (User) + sentinel-ошибки (ErrUserNotFound)
 ```
 
+Параллельно HTTP-серверу может работать **Kafka consumer** (`pkg/kafka`),
+который получает сообщения и вызывает бизнес-логику из `internal/service`.
+
 | Слой | Пакет | Ответственность | Знает о |
 |------|-------|-----------------|---------|
 | Точка входа | `cmd/app` | загрузка конфига, signal context, вызов `app.Run` | `app`, `config` |
+| CLI | `cmd/cli` | административные команды (cobra) | `config`, `repository`, `service` |
 | Composition root | `internal/app` | создаёт все зависимости, запускает/останавливает HTTP-сервер | всё |
 | Контракт | `generated/api` | сгенерированные типы, роутер, strict-интерфейс, embedded-спека | — (не редактируется) |
 | Транспорт | `internal/http` | роутер, middleware, реализация `StrictServerInterface` | `generated/api`, `domain`, `service` (через интерфейс) |
-| Бизнес-логика | `internal/service` | оркестрация, кэширование, доменные правила | `domain`, `repository` (через интерфейс), `pkg/redis` |
+| Бизнес-логика | `internal/service` | оркестрация, кэширование, доменные правила | `domain`, `repository` (через интерфейс) |
 | Данные | `internal/repository` | SQL-запросы, маппинг ошибок БД | `domain`, `pkg/postgres` |
 | Домен | `internal/domain` | сущности и sentinel-ошибки | — |
 
@@ -123,13 +118,20 @@ internal/domain                 сущности (User) + sentinel-ошибки 
   `userService`, `internal/service` объявляет `userRepository` — каждый в своём
   файле, неэкспортируемые, по роли зависимости. Конкретные типы (`*service.UserService`,
   `*repository.UserRepository`) подставляются в `app.go`. Это позволяет
-  тестировать каждый слой с фейком (см. `internal/http/router_test.go`).
+  тестировать каждый слой с фейком.
 - **Доменные ошибки — граница между слоями.** Repository превращает ошибки
   pgx/PostgreSQL в `domain.ErrXxx` (например, нарушение unique-constraint
   `23505` → `domain.ErrUserExists`); handler превращает `domain.ErrXxx` в
   HTTP-коды. Сравнение только через `errors.Is`.
 - **Wiring — вручную, без DI-фреймворка.** Вся сборка зависимостей видна в
   одном месте — `internal/app/app.go`.
+- **Аутентификация.** Спека объявляет глобальный `security: BasicAuth`.
+  Middleware `BasicAuth` в `internal/http/middleware` проверяет credentials через
+  `userAuthenticator` интерфейс (реализован в `service.UserService.Authenticate`)
+  и кладёт `AuthUser` в контекст запроса.
+- **Observability.** Весь роутер обёрнут в `apmhttp.Wrap` — каждый запрос
+  автоматически создаёт APM-транзакцию. Логгер использует `apmslog` handler для
+  корреляции логов с трейсами.
 
 ## Конфигурация
 
@@ -142,10 +144,25 @@ internal/domain                 сущности (User) + sentinel-ошибки 
 ```go
 log, err := logger.New(logger.Config(cfg.Logger))
 pg,  err := postgres.New(ctx, postgres.Config(cfg.Postgres))
-rdb, err := redis.New(ctx, redis.Config(cfg.Redis))
+rdb, err := redis.New(ctx, buildRedisConfig(cfg.Redis))   // нетривиальная трансформация для Sentinel
 ```
 
 Если поле добавлено на одной стороне, но не на другой — код перестаёт компилироваться.
+
+### Блоки конфигурации
+
+| Блок | Переменные | Описание                                               |
+|------|-----------|--------------------------------------------------------|
+| App | `APP_NAME`, `APP_ENV` | Имя сервиса и окружение (local/development/production) |
+| HTTP | `HTTP_ADDR`, `HTTP_*_TIMEOUT` | Адрес и таймауты сервера                               |
+| Logger | `LOG_LEVEL` | Уровень логирования (debug/info/warn/error)            |
+| Postgres | `POSTGRES_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_DB`, `_SSL_MODE`, `_MAX_CONNS`, `_MIN_CONNS`, `_CONN_TIMEOUT` | Подключение к PostgreSQL                               |
+| Redis | `REDIS_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_DB`, `_POOL_SIZE`, `_*_TIMEOUT`, `_CACHE_PREFIX` | Standalone-подключение                                 |
+| Redis Sentinel | `REDIS_SENTINEL_ENABLED`, `_HOST_1..3`, `_PORT`, `_SERVICE`, `_PASSWORD` | HA-режим через Sentinel                                |
+| Kafka | `KAFKA_BROKERS`, `_GROUP_ID`, `_TOPICS`, `_DIAL_TIMEOUT`, `_USERNAME`, `_PASSWORD`, `_MAX_RETRIES`, `_RETRY_BACKOFF` | Consumer/Producer (Redpanda)                           |
+| Elastic APM | `ELASTIC_APM_SERVER_URL`, `_SERVICE_NAME`, `_ENVIRONMENT`, `_SECRET_TOKEN` | Трейсинг и мониторинг                                  |
+
+Полный список переменных с дефолтами — в `.env.example`.
 
 ## Spec-first API
 
@@ -160,10 +177,10 @@ HTTP-контракт — **единственный источник истин
 | Файл | Редактируется | Назначение |
 |------|:---:|------------|
 | `definitions.yaml` | ✍️ вручную | Переиспользуемые `schemas` и `parameters`. `x-go-type` маппит OpenAPI-типы на готовые Go-типы (например `UUID` → `uuid.UUID`). |
-| `api.yaml` | ✍️ вручную | `paths` и `operations`; ссылается на `definitions.yaml` через `$ref`. Здесь же базовый путь (`servers: /api/v1`). |
+| `api.yaml` | ✍️ вручную | `paths` и `operations`; ссылается на `definitions.yaml` через `$ref`. Здесь же базовый путь и `security` (BasicAuth). |
 | `definitions-cfg.yaml`, `cfg.yaml` | ✍️ вручную | Конфиги генерации (типы и сервер соответственно). |
 | `definitions.go` | 🤖 генерируется | Go-типы из `definitions.yaml`. |
-| `gen.go` | 🤖 генерируется | `StrictServerInterface`, `*RequestObject`/`*ResponseObject`, роутер `HandlerWithOptions`, embedded-спека `GetSwagger()`. |
+| `gen.go` | 🤖 генерируется | `StrictServerInterface`, `*RequestObject`/`*ResponseObject`, роутер `HandlerWithOptions`, embedded-спека `GetSpec()`. |
 
 `cfg.yaml` содержит `import-mapping: { ./definitions.yaml: "-" }` — это говорит
 генератору переиспользовать типы из уже сгенерированного `definitions.go`, а не
@@ -183,19 +200,32 @@ HTTP-контракт — **единственный источник истин
 - **Runtime-валидация**: middleware `OapiRequestValidator` сверяет входящий
   запрос с embedded-спекой (обязательные параметры, схема тела, `Content-Type`)
   и отклоняет некорректный запрос с `400` **до** попадания в хендлер.
+- **Аутентификация в спеке**: глобальный `security: [BasicAuth: []]` означает,
+  что все эндпоинты требуют Basic Auth. Middleware обрабатывает это до валидатора.
 
 ### Как добавить новый endpoint (пошагово)
 
-Пример: добавим `DELETE /api/v1/users/{id}`.
+Пример: добавим `DELETE /users/{id}`.
 
-**Шаг 1 — описать операцию в `api.yaml`.** Добавьте операцию к существующему
-path `/users/{id}` (параметр `id` уже описан в `definitions.yaml`):
+**Шаг 1 — описать типы/параметры (если нужны новые) в `definitions.yaml`.**
+Добавьте параметр `UserID`, если его ещё нет:
+
+```yaml
+  parameters:
+    UserID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UUID'
+```
+
+**Шаг 2 — описать операцию в `api.yaml`:**
 
 ```yaml
   /users/{id}:
-    # ... get: ...
     delete:
-      operationId: deleteUser          # → метод DeleteUser в Go (PascalCase)
+      operationId: DeleteUser          # → метод DeleteUser в Go (PascalCase)
       summary: Delete a user by ID
       parameters:
         - $ref: './definitions.yaml#/components/parameters/UserID'
@@ -210,10 +240,7 @@ path `/users/{id}` (параметр `id` уже описан в `definitions.ya
                 $ref: './definitions.yaml#/components/schemas/Error'
 ```
 
-Если нужны новые типы (тело запроса, новая сущность) — добавьте их в
-`definitions.yaml` в `components/schemas` и сошлитесь через `$ref`.
-
-**Шаг 2 — сгенерировать код:**
+**Шаг 3 — сгенерировать код:**
 
 ```sh
 make generate
@@ -222,7 +249,7 @@ make generate
 Появятся `DeleteUserRequestObject`, `DeleteUser204Response`,
 `DeleteUser404JSONResponse` и новый метод в `StrictServerInterface`.
 
-**Шаг 3 — убедиться, что компилятор требует реализацию:**
+**Шаг 4 — убедиться, что компилятор требует реализацию:**
 
 ```sh
 go build ./...
@@ -230,7 +257,7 @@ go build ./...
 #   (missing method DeleteUser)
 ```
 
-**Шаг 4 — добавить бизнес-логику вниз по слоям** (если её ещё нет). В
+**Шаг 5 — добавить бизнес-логику вниз по слоям** (если её ещё нет). В
 `internal/domain` — при необходимости sentinel-ошибка; в
 `internal/repository/user.go` — SQL; в `internal/service/user.go` — метод и
 расширение интерфейса `userRepository`:
@@ -259,9 +286,9 @@ func (s *UserService) Delete(ctx context.Context, id uuid.UUID) error {
 }
 ```
 
-**Шаг 5 — реализовать метод хендлера** в `internal/http/handler/user.go`.
-Добавьте `Delete` в потребительский интерфейс `userService` (в
-`internal/http/handler/server.go`), затем сам метод:
+**Шаг 6 — реализовать метод хендлера** в `internal/http/handler/server.go`
+(или в отдельном файле `user.go`). Добавьте `Delete` в потребительский
+интерфейс `userService`, затем сам метод:
 
 ```go
 func (s *Server) DeleteUser(ctx context.Context, req api.DeleteUserRequestObject) (api.DeleteUserResponseObject, error) {
@@ -269,14 +296,14 @@ func (s *Server) DeleteUser(ctx context.Context, req api.DeleteUserRequestObject
         if errors.Is(err, domain.ErrUserNotFound) {
             return api.DeleteUser404JSONResponse{Error: "user not found"}, nil
         }
-        s.log.Error("delete user", zap.Error(err))
+        s.log.Error("delete user", "error", err)
         return nil, err     // → strict adapter вернёт 500
     }
     return api.DeleteUser204Response{}, nil
 }
 ```
 
-**Шаг 6 — проверить:**
+**Шаг 7 — проверить:**
 
 ```sh
 go build ./...      # компилируется → контракт реализован полностью
@@ -313,9 +340,10 @@ make test           # тесты с race detector
    grep -rl "github.com/zulfikorramatov/arche" . --include="*.go" --include="go.mod" | xargs sed -i '' 's|github.com/zulfikorramatov/arche|github.com/your-org/your-service|g'
    ```
 3. Переименовать контейнеры и `APP_NAME` в `docker-compose.yml` / `.env`
-4. Заменить домен `user` на свой: спека (`api.yaml`, `definitions.yaml`) →
+4. Удалить/заменить домен `user` на свой: спека (`api.yaml`, `definitions.yaml`) →
    `make generate` → `domain`/`repository`/`service`/`handler` → миграции
-5. `make tidy && make up`
+5. Удалить ненужные `pkg/` (например `pkg/money` если не нужна валюта)
+6. `make tidy && make up && make run`
 
 ## Стиль кода
 

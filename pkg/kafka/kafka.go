@@ -1,11 +1,3 @@
-// Package kafka wraps franz-go behind Config-driven constructors for a
-// durable Producer and an at-least-once Consumer. The package is independent
-// of the rest of the project: it has no knowledge of env vars or .env files —
-// callers populate Config and pass it in, so it stays copy-pasteable.
-//
-// Producer guarantees delivery: acks=all + idempotent writes + synchronous
-// Produce. Consumer never loses messages: auto-commit is disabled and offsets
-// are committed only after the handler succeeds (at-least-once). See README.md.
 package kafka
 
 import (
@@ -20,14 +12,12 @@ type Config struct {
 	GroupID      string
 	Topics       []string
 	DialTimeout  time.Duration
-	Username     string // optional SASL/SCRAM-SHA-512
+	Username     string
 	Password     string
-	MaxRetries   int           // consumer: per-message retries before the error is treated as fatal
-	RetryBackoff time.Duration // consumer: delay between retries
+	MaxRetries   int
+	RetryBackoff time.Duration
 }
 
-// Message is the decoded record handed to a consumer handler and the payload
-// accepted by the producer.
 type Message struct {
 	Topic string
 	Key   []byte

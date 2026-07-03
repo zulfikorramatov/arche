@@ -1,152 +1,203 @@
-# Go Style Guide
+# Style Guide
 
-This document codifies the coding conventions used in this repository.
-It serves as a reference for contributors and AI-assisted development tools.
-
-## Packages
-
-- **Names**: single lowercase word — `handler`, `service`, `repository`, `domain`.
-  Never `userHandler` or `user_service`.
-- **`pkg/*`** packages are self-contained libraries with zero knowledge of
-  `internal/*`, env vars, or the application config.
-  They must be copy-pasteable to another project without modification.
-- **`internal/*`** packages hold application-specific logic.
+This document describes the coding conventions used throughout the project.
+When in doubt, follow the existing code — consistency trumps personal preference.
 
 ## Naming
 
-| Kind              | Convention          | Example                          |
-| ----------------- | ------------------- | -------------------------------- |
-| Constructors      | `NewXxx`            | `NewUserHandler`, `New`          |
-| Interfaces        | unexported, by role | `userService`, `userRepository`  |
-| Sentinel errors   | `ErrXxxYyy`         | `ErrUserNotFound`, `ErrUserExists` |
-| Constants         | CamelCase           | `FormatJSON`, `userCacheTTL`     |
-| Struct fields      | PascalCase          | `CreatedAt`, `SSLMode`           |
-| JSON tags         | snake_case          | `json:"created_at"`             |
-| Env tags          | UPPER_SNAKE_CASE    | `env:"POSTGRES_HOST"`           |
+### Packages
 
-## Interfaces
+- Single lowercase word: `domain`, `service`, `handler`, `postgres`.
+- Never plural (`utils`, `helpers`, `models`) — find a specific name.
 
-Interfaces are declared by the **consumer**, not the provider:
+### Constructors and types
 
-```go
-// in handler/user.go — handler declares what it needs from the service layer
-type userService interface {
-    Create(ctx context.Context, email, name string) (*domain.User, error)
-    GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
-}
-```
+- Constructors: `NewXxx` (e.g. `NewUserService`, `NewRouter`).
+- Exported types: PascalCase. Unexported: camelCase.
+- Avoid stuttering: `service.UserService` is fine, `service.ServiceUser` is not.
 
-- Always unexported.
-- Named after the dependency role, not the concrete type.
-- Defined in the file that uses them, not in a separate `interfaces.go`.
+### Tags
 
-## Imports
+| Context | Convention | Example |
+|---------|-----------|---------|
+| JSON | `snake_case` | `json:"created_at"` |
+| Env | `UPPER_SNAKE_CASE` | `env:"POSTGRES_HOST"` |
+| DB column | `snake_case` | positional `$1` in queries |
 
-Three groups separated by blank lines:
+### Imports
+
+Group in three blocks separated by blank lines:
 
 ```go
 import (
-    "context"
+    "context"        // 1. stdlib
     "fmt"
 
-    "github.com/go-chi/chi/v5"
-    "go.uber.org/zap"
+    "github.com/go-chi/chi/v5"  // 2. external
+    "github.com/google/uuid"
 
-    "github.com/zulfikorramatov/arche/internal/domain"
+    "github.com/zulfikorramatov/arche/internal/entity"  // 3. internal
 )
 ```
 
-1. Standard library
-2. Third-party
-3. Project-internal
+`goimports` with `local-prefixes: github.com/zulfikorramatov/arche` handles this
+automatically (configured in `.golangci.yml`).
 
-**Aliases** only when there is a name conflict:
+## Interfaces
+
+**Consumer-defined.** The package that _uses_ a dependency declares its own
+interface describing what it needs — not what the implementation offers.
 
 ```go
-httpserver    "github.com/zulfikorramatov/arche/internal/http"
-chimiddleware "github.com/go-chi/chi/v5/middleware"
-appmiddleware "github.com/zulfikorramatov/arche/internal/http/middleware"
-goredis       "github.com/redis/go-redis/v9"
+// internal/http/handler/server.go
+type userService interface {
+    List(ctx context.Context) ([]domain.User, error)
+}
 ```
 
-## Error handling
+Rules:
+- **Unexported** — only visible within the declaring package.
+- **Named by role** — `userService`, `userRepository`, not `UserServiceInterface`.
+- **Declared in the file that uses them** — not in a shared `interfaces.go`.
+- **Concrete types wired in `app.go`** — manual DI, no framework.
 
-- Wrap with context: `fmt.Errorf("insert user: %w", err)` — lowercase, no
-  trailing period.
-- Use domain sentinel errors for expected cases:
-  ```go
-  var ErrUserNotFound = errors.New("user not found")
-  ```
-- Check with `errors.Is()` / `errors.As()`, never compare strings.
-- Map infrastructure errors to domain errors at the boundary:
-  ```go
-  var pgErr *pgconn.PgError
-  if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-      return domain.ErrUserExists
-  }
-  ```
-- Non-critical errors (cache writes, logger sync) may be silently discarded:
-  `_ = rdb.Set(...)`.
+This enables testing each layer with a minimal fake.
+
+## Errors
+
+### Wrapping
+
+Always lowercase, describing the action that failed:
+
+```go
+return fmt.Errorf("insert user: %w", err)
+```
+
+Never start with uppercase. Never include the function name if it's obvious
+from context.
+
+### Domain sentinels
+
+Expected (handleable) errors live in `internal/domain`:
+
+```go
+var ErrUserNotFound = errors.New("user not found")
+var ErrUserExists   = errors.New("user already exists")
+```
+
+### Boundary mapping
+
+- **Repository → domain:** map infrastructure errors to domain sentinels.
+  Example: PostgreSQL unique violation `23505` → `domain.ErrUserExists`.
+- **Handler → HTTP:** map domain sentinels to response types.
+  Example: `domain.ErrUserNotFound` → `api.DeleteUser404JSONResponse`.
+
+### Comparison
+
+Always `errors.Is` or `errors.As` — never `==`.
+
+### Discardable errors
+
+When an error is intentionally ignored (cache writes, log sync), assign to `_`
+explicitly:
+
+```go
+_ = s.cache.Del(ctx, key).Err()
+```
 
 ## SQL
 
-- Queries as `const` inside the method that uses them:
-  ```go
-  func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
-      const q = `
-          SELECT id, email, name, created_at, updated_at
-          FROM users
-          WHERE id = $1
-      `
-      // ...
-  }
-  ```
-- Positional placeholders: `$1`, `$2`, ... (pgx style).
-- No ORM — raw SQL with `pgx`.
+- **Raw pgx** — no ORM, no query builder.
+- Queries are declared as `const q` inside the method:
 
-## HTTP handlers
+```go
+func (r *UserRepository) List(ctx context.Context) ([]domain.User, error) {
+    const q = `SELECT id, username, password, created_at FROM users`
+    rows, err := r.pool.Query(ctx, q)
+    // ...
+}
+```
 
-- One struct per domain: `UserHandler`, `OrderHandler`, etc.
-- Private helpers `writeJSON` / `writeError` for consistent responses.
-- Validation inline; map domain errors to HTTP status codes in the handler:
-  ```go
-  if errors.Is(err, domain.ErrUserNotFound) {
-      writeError(w, http.StatusNotFound, "user not found")
-      return
-  }
-  ```
-- Early return — happy path is not nested.
+- **Positional placeholders**: `$1`, `$2`, etc.
+- **Uppercase SQL keywords**: `SELECT`, `INSERT INTO`, `WHERE`, `DELETE FROM`.
+- Keep queries single-purpose; combine at the service layer if needed.
 
-## Config
+## Testing
 
-- Env tags live **only** in `internal/config/config.go`.
-- `pkg/*` Config structs use plain fields — no tags.
-- Field layout between `config.XxxConfig` and `pkg/xxx.Config` must match
-  exactly (names, types, order) so `pkg.Config(cfg.Xxx)` compiles.
-  Drift is caught at build time.
+- **Table-driven** with `t.Run` subtests.
+- Naming: `TestType_Method_scenario` (e.g. `TestUserService_Create_duplicate`).
+- Race detector always on: `go test -race -count=1 ./...`
+- Fakes over mocking frameworks — implement the consumer interface by hand.
+- No test helpers in `pkg/` — keep tests self-contained.
+
+```go
+func TestUserService_List_empty(t *testing.T) {
+    repo := &fakeUserRepo{users: nil}
+    svc := service.NewUserService(repo)
+
+    got, err := svc.List(context.Background())
+
+    require.NoError(t, err)
+    assert.Empty(t, got)
+}
+```
 
 ## Comments
 
-- Default: **no comments**. Well-named identifiers are self-documenting.
-- Exceptions: package-level doc comments on `pkg/*`, and comments explaining
-  non-obvious design decisions or constraints.
-- Never write per-function doc comments on self-evident code.
-- Never reference tickets, PRs, or task descriptions in code comments.
+**Default: none.** Names should carry meaning.
 
-## Resource lifecycle
+Exceptions:
+- Package-level doc comments on `pkg/*` packages (they're libraries).
+- Notes on genuinely non-obvious decisions or tradeoffs.
+- `// TODO:` for known technical debt (rare).
 
-- Create resources in `app.Run`, clean up with `defer`:
-  ```go
-  pg, err := postgres.New(ctx, postgres.Config(cfg.Postgres))
-  if err != nil { return fmt.Errorf("new postgres: %w", err) }
-  defer pg.Close()
-  ```
-- Graceful HTTP shutdown via `signal.NotifyContext` + `srv.Shutdown`.
+Never:
+- Per-function doc comments on self-evident code.
+- Ticket/PR references in code (use git history).
+- Commented-out code (delete it; git remembers).
 
-## Tests
+## `pkg/*` vs `internal/*`
 
-- Table-driven tests with `t.Run` subtests.
-- Test naming: `TestTypeName_Method_scenario` — e.g.,
-  `TestUserService_Create_duplicateEmail`.
-- Race detector always on: `go test -race`.
-- Mock dependencies via consumer-defined interfaces, not framework mocks.
+| | `pkg/*` | `internal/*` |
+|---|---------|-------------|
+| Knowledge of app | Zero | Full |
+| Config | Plain struct, no tags | Env-tagged struct |
+| Dependencies | Only stdlib + its own deps | Anything |
+| Reusability | Copy-pasteable to another project | Project-specific |
+
+The bridge is `internal/app/app.go` which does explicit struct conversion:
+
+```go
+pg, err := postgres.New(ctx, postgres.Config(cfg.Postgres))
+```
+
+If fields drift between the two sides, the build breaks — this is intentional.
+
+## HTTP layer conventions
+
+- **Spec-first**: the OpenAPI spec is the source of truth for endpoints.
+- **Never register routes manually** in `router.go` — they come from generated code.
+- Handlers implement `api.StrictServerInterface` — they receive typed request
+  objects and return typed response objects. No `http.ResponseWriter`, no
+  `json.Decode`.
+- One `Server` struct in `handler/` implements all operations. Different domains
+  get separate files with methods on `*Server`.
+- Map domain errors → response types; let unknown errors bubble up (strict
+  adapter returns 500).
+
+## Middleware
+
+Middleware lives in `internal/http/middleware/`. Order in the router matters:
+
+1. `RequestID` — assigns a unique ID to each request.
+2. `Logger` — structured request logging (method, path, status, duration).
+3. `ErrorHandler` — normalizes non-JSON error responses to `{"error": "..."}`.
+4. `BasicAuth` — authenticates via `userAuthenticator` interface, puts `AuthUser` in context.
+
+## Configuration
+
+- All runtime config from environment variables (cleanenv + godotenv).
+- `.env.example` is the single source of truth for variable names.
+- Defaults live in `env-default` tags in `internal/config/config.go`.
+- In containers `.env` is absent — runtime supplies vars directly.
+- Never read `os.Getenv` directly outside `internal/config`.
