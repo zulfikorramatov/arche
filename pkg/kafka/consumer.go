@@ -9,15 +9,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// Handler processes a single consumed message. Returning an error triggers a
-// bounded retry (see Config.MaxRetries); if every attempt fails the error is
-// fatal and Run returns it. Handlers must be idempotent — at-least-once means
-// a message can be redelivered (on retry, or after a pod restart).
 type Handler func(ctx context.Context, msg Message) error
 
-// Consumer is an at-least-once Kafka consumer group reader. Auto-commit is
-// disabled; offsets are committed only after the handler succeeds, so a crash
-// mid-processing redelivers the message instead of losing it.
 type Consumer struct {
 	client       *kgo.Client
 	maxRetries   int
@@ -53,20 +46,17 @@ func NewConsumer(ctx context.Context, cfg Config, opts ...Option) (*Consumer, er
 	return &Consumer{client: client, maxRetries: o.maxRetries, retryBackoff: o.retryBackoff}, nil
 }
 
-// Run polls and dispatches messages until ctx is canceled (clean shutdown,
-// returns nil). Each record is committed only after the handler succeeds. A
-// message that still fails after MaxRetries — or an unrecoverable client/poll
-// error — is returned as a fatal error so the caller can fail the pod and let
-// Kubernetes restart it; the surviving pods cover the partitions via rebalance.
 func (c *Consumer) Run(ctx context.Context, handler Handler) error {
 	for {
 		fetches := c.client.PollFetches(ctx)
 		if fetches.IsClientClosed() {
 			return nil
 		}
+
 		if ctx.Err() != nil {
 			return nil
 		}
+
 		if errs := fetches.Errors(); len(errs) > 0 {
 			if errors.Is(errs[0].Err, context.Canceled) {
 				return nil
@@ -74,7 +64,6 @@ func (c *Consumer) Run(ctx context.Context, handler Handler) error {
 			return fmt.Errorf("poll fetches: %w", errs[0].Err)
 		}
 
-		var processed []*kgo.Record
 		iter := fetches.RecordIter()
 		for !iter.Done() {
 			record := iter.Next()
@@ -82,23 +71,18 @@ func (c *Consumer) Run(ctx context.Context, handler Handler) error {
 
 			if err := c.handle(ctx, handler, msg); err != nil {
 				if ctx.Err() != nil {
-					return nil // canceled mid-retry: clean shutdown, not fatal
+					return nil
 				}
-				_ = c.commit(ctx, processed) // best-effort: don't reprocess what already succeeded
 				return fmt.Errorf("handle message: %w", err)
 			}
-			processed = append(processed, record)
-		}
 
-		if err := c.commit(ctx, processed); err != nil {
-			return err
+			if err := c.commit(ctx, record); err != nil {
+				return err
+			}
 		}
 	}
 }
 
-// handle runs the handler with bounded retries and backoff. It returns nil on
-// success, ctx.Err() if cancelled while waiting, or the last handler error once
-// the retries are exhausted.
 func (c *Consumer) handle(ctx context.Context, handler Handler, msg Message) error {
 	var err error
 	for attempt := 0; ; attempt++ {
@@ -116,12 +100,9 @@ func (c *Consumer) handle(ctx context.Context, handler Handler, msg Message) err
 	}
 }
 
-func (c *Consumer) commit(ctx context.Context, records []*kgo.Record) error {
-	if len(records) == 0 {
-		return nil
-	}
-	if err := c.client.CommitRecords(ctx, records...); err != nil {
-		return fmt.Errorf("commit records: %w", err)
+func (c *Consumer) commit(ctx context.Context, record *kgo.Record) error {
+	if err := c.client.CommitRecords(ctx, record); err != nil {
+		return fmt.Errorf("commit record: %w", err)
 	}
 	return nil
 }
