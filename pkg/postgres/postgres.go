@@ -13,17 +13,12 @@ import (
 type Pool = pgxpool.Pool
 
 type Config struct {
-	Host        string
-	Port        int
-	User        string
-	Password    string
-	Database    string
-	SSLMode     string
-	MaxConns    int32
-	MinConns    int32
-	ConnTimeout time.Duration
-	RetryDelay  time.Duration
-	MaxAttempts int
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
+	SSLMode  string
 }
 
 func (c Config) DSN() string {
@@ -39,42 +34,46 @@ func (c Config) DSN() string {
 	return u.String()
 }
 
-func New(ctx context.Context, cfg Config) (*Pool, error) {
-	if cfg.MaxAttempts < 1 {
-		cfg.MaxAttempts = 1
+func New(ctx context.Context, cfg Config, opts ...Option) (*Pool, error) {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.maxAttempts < 1 {
+		o.maxAttempts = 1
 	}
 
 	poolCfg, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("parse pool config: %w", err)
 	}
-	if cfg.MaxConns > 0 {
-		poolCfg.MaxConns = cfg.MaxConns
+	if o.maxConns > 0 {
+		poolCfg.MaxConns = o.maxConns
 	}
-	if cfg.MinConns > 0 {
-		poolCfg.MinConns = cfg.MinConns
+	if o.minConns > 0 {
+		poolCfg.MinConns = o.minConns
 	}
 	apmpgxv5.Instrument(poolCfg.ConnConfig)
 
 	var pool *Pool
-	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
-		pool, err = connect(ctx, poolCfg, cfg.ConnTimeout)
+	for attempt := 1; attempt <= o.maxAttempts; attempt++ {
+		pool, err = connect(ctx, poolCfg, o.connTimeout)
 		if err == nil {
 			return pool, nil
 		}
 
-		if attempt == cfg.MaxAttempts {
+		if attempt == o.maxAttempts {
 			break
 		}
 
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("connect postgres: %w", ctx.Err())
-		case <-time.After(cfg.RetryDelay):
+		case <-time.After(o.retryDelay):
 		}
 	}
 
-	return nil, fmt.Errorf("connect postgres after %d attempts: %w", cfg.MaxAttempts, err)
+	return nil, fmt.Errorf("connect postgres after %d attempts: %w", o.maxAttempts, err)
 }
 
 func connect(ctx context.Context, poolCfg *pgxpool.Config, timeout time.Duration) (*Pool, error) {

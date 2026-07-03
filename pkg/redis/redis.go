@@ -14,18 +14,12 @@ type Client = redis.Client
 var Nil = redis.Nil
 
 type Config struct {
-	Host         string
-	Port         int
-	Username     string
-	Password     string
-	DB           int
-	KeyPrefix    string
-	PoolSize     int
-	DialTimeout  time.Duration
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	RetryDelay   time.Duration
-	MaxAttempts  int
+	Host      string
+	Port      int
+	Username  string
+	Password  string
+	DB        int
+	KeyPrefix string
 
 	SentinelEnabled    bool
 	SentinelAddrs      []string
@@ -33,9 +27,13 @@ type Config struct {
 	SentinelPassword   string
 }
 
-func New(ctx context.Context, cfg Config) (*Client, error) {
-	if cfg.MaxAttempts < 1 {
-		cfg.MaxAttempts = 1
+func New(ctx context.Context, cfg Config, opts ...Option) (*Client, error) {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.maxAttempts < 1 {
+		o.maxAttempts = 1
 	}
 
 	var client *redis.Client
@@ -46,10 +44,10 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 			Username:      cfg.Username,
 			Password:      cfg.SentinelPassword,
 			DB:            cfg.DB,
-			PoolSize:      cfg.PoolSize,
-			DialTimeout:   cfg.DialTimeout,
-			ReadTimeout:   cfg.ReadTimeout,
-			WriteTimeout:  cfg.WriteTimeout,
+			PoolSize:      o.poolSize,
+			DialTimeout:   o.dialTimeout,
+			ReadTimeout:   o.readTimeout,
+			WriteTimeout:  o.writeTimeout,
 		})
 	} else {
 		client = redis.NewClient(&redis.Options{
@@ -57,10 +55,10 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 			Username:     cfg.Username,
 			Password:     cfg.Password,
 			DB:           cfg.DB,
-			PoolSize:     cfg.PoolSize,
-			DialTimeout:  cfg.DialTimeout,
-			ReadTimeout:  cfg.ReadTimeout,
-			WriteTimeout: cfg.WriteTimeout,
+			PoolSize:     o.poolSize,
+			DialTimeout:  o.dialTimeout,
+			ReadTimeout:  o.readTimeout,
+			WriteTimeout: o.writeTimeout,
 		})
 	}
 
@@ -69,13 +67,13 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}
 
 	var err error
-	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
-		err = ping(ctx, client, cfg.DialTimeout)
+	for attempt := 1; attempt <= o.maxAttempts; attempt++ {
+		err = ping(ctx, client, o.dialTimeout)
 		if err == nil {
 			return client, nil
 		}
 
-		if attempt == cfg.MaxAttempts {
+		if attempt == o.maxAttempts {
 			break
 		}
 
@@ -83,12 +81,12 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		case <-ctx.Done():
 			_ = client.Close()
 			return nil, fmt.Errorf("connect redis: %w", ctx.Err())
-		case <-time.After(cfg.RetryDelay):
+		case <-time.After(o.retryDelay):
 		}
 	}
 
 	_ = client.Close()
-	return nil, fmt.Errorf("connect redis after %d attempts: %w", cfg.MaxAttempts, err)
+	return nil, fmt.Errorf("connect redis after %d attempts: %w", o.maxAttempts, err)
 }
 
 func ping(ctx context.Context, client *redis.Client, timeout time.Duration) error {

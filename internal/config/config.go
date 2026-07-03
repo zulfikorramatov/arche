@@ -34,32 +34,21 @@ type LoggerConfig struct {
 }
 
 type PostgresConfig struct {
-	Host        string        `env:"POSTGRES_HOST"          env-default:"localhost"`
-	Port        int           `env:"POSTGRES_PORT"          env-default:"5432"`
-	User        string        `env:"POSTGRES_USER"          env-default:"postgres"`
-	Password    string        `env:"POSTGRES_PASSWORD"`
-	Database    string        `env:"POSTGRES_DB"            env-default:"app"`
-	SSLMode     string        `env:"POSTGRES_SSL_MODE"      env-default:"disable"`
-	MaxConns    int32         `env:"POSTGRES_MAX_CONNS"     env-default:"10"`
-	MinConns    int32         `env:"POSTGRES_MIN_CONNS"     env-default:"1"`
-	ConnTimeout time.Duration `env:"POSTGRES_CONN_TIMEOUT"  env-default:"5s"`
-	RetryDelay  time.Duration `env:"POSTGRES_RETRY_DELAY"   env-default:"5s"`
-	MaxAttempts int           `env:"POSTGRES_MAX_ATTEMPTS"  env-default:"5"`
+	Host     string `env:"POSTGRES_HOST"      env-default:"localhost"`
+	Port     int    `env:"POSTGRES_PORT"      env-default:"5432"`
+	User     string `env:"POSTGRES_USER"      env-default:"postgres"`
+	Password string `env:"POSTGRES_PASSWORD"`
+	Database string `env:"POSTGRES_DB"        env-default:"app"`
+	SSLMode  string `env:"POSTGRES_SSL_MODE"  env-default:"disable"`
 }
 
 type RedisConfig struct {
-	Host         string        `env:"REDIS_HOST"          env-default:"localhost"`
-	Port         int           `env:"REDIS_PORT"          env-default:"6379"`
-	Username     string        `env:"REDIS_USERNAME"`
-	Password     string        `env:"REDIS_PASSWORD"`
-	DB           int           `env:"REDIS_DB"            env-default:"0"`
-	KeyPrefix    string        `env:"REDIS_CACHE_PREFIX"`
-	PoolSize     int           `env:"REDIS_POOL_SIZE"     env-default:"10"`
-	DialTimeout  time.Duration `env:"REDIS_DIAL_TIMEOUT"  env-default:"1s"`
-	ReadTimeout  time.Duration `env:"REDIS_READ_TIMEOUT"  env-default:"3s"`
-	WriteTimeout time.Duration `env:"REDIS_WRITE_TIMEOUT" env-default:"3s"`
-	RetryDelay   time.Duration `env:"REDIS_RETRY_DELAY"   env-default:"3s"`
-	MaxAttempts  int           `env:"REDIS_MAX_ATTEMPTS"  env-default:"5"`
+	Host      string `env:"REDIS_HOST"          env-default:"localhost"`
+	Port      int    `env:"REDIS_PORT"          env-default:"6379"`
+	Username  string `env:"REDIS_USERNAME"`
+	Password  string `env:"REDIS_PASSWORD"`
+	DB        int    `env:"REDIS_DB"            env-default:"0"`
+	KeyPrefix string `env:"REDIS_CACHE_PREFIX"`
 
 	SentinelEnabled    bool   `env:"REDIS_SENTINEL_ENABLED"  env-default:"false"`
 	SentinelHost1      string `env:"REDIS_SENTINEL_HOST_1"`
