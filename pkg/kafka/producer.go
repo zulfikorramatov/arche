@@ -11,19 +11,24 @@ type Producer struct {
 	client *kgo.Client
 }
 
-func NewProducer(ctx context.Context, cfg Config) (*Producer, error) {
-	opts := append(
-		clientOpts(cfg),
+func NewProducer(ctx context.Context, cfg Config, opts ...Option) (*Producer, error) {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	clientOptions := append(
+		clientOpts(cfg, o),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.AllowAutoTopicCreation(),
 	)
 
-	client, err := kgo.NewClient(opts...)
+	client, err := kgo.NewClient(clientOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("new producer client: %w", err)
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
+	pingCtx, cancel := context.WithTimeout(ctx, o.dialTimeout)
 	defer cancel()
 
 	if err := client.Ping(pingCtx); err != nil {
@@ -34,8 +39,6 @@ func NewProducer(ctx context.Context, cfg Config) (*Producer, error) {
 	return &Producer{client: client}, nil
 }
 
-// Produce writes a single record synchronously and returns once the broker has
-// acknowledged it (or with an error if it has not).
 func (p *Producer) Produce(ctx context.Context, topic string, key, value []byte) error {
 	record := &kgo.Record{Topic: topic, Key: key, Value: value}
 	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {

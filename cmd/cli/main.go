@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
 	"github.com/zulfikorramatov/arche/cmd/cli/deps"
 	"github.com/zulfikorramatov/arche/cmd/cli/user"
 	"github.com/zulfikorramatov/arche/internal/config"

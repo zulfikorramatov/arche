@@ -10,6 +10,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/google/uuid"
 	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
+
 	"github.com/zulfikorramatov/arche/generated/api"
 )
 

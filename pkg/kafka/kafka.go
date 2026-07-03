@@ -1,21 +1,16 @@
 package kafka
 
 import (
-	"time"
-
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
 type Config struct {
-	Brokers      []string
-	GroupID      string
-	Topics       []string
-	DialTimeout  time.Duration
-	Username     string
-	Password     string
-	MaxRetries   int
-	RetryBackoff time.Duration
+	Brokers  []string
+	GroupID  string
+	Topics   []string
+	Username string
+	Password string
 }
 
 type Message struct {
@@ -26,10 +21,10 @@ type Message struct {
 
 // clientOpts builds the options shared by the producer and consumer: seed
 // brokers, dial timeout and optional SASL/SCRAM-SHA-512 auth.
-func clientOpts(cfg Config) []kgo.Opt {
+func clientOpts(cfg Config, o options) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
-		kgo.DialTimeout(cfg.DialTimeout),
+		kgo.DialTimeout(o.dialTimeout),
 	}
 
 	if cfg.Username != "" && cfg.Password != "" {

@@ -60,14 +60,11 @@ type RedisConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers      []string      `env:"KAFKA_BROKERS"       env-separator:"," env-default:"localhost:19092"`
-	GroupID      string        `env:"KAFKA_GROUP_ID"      env-default:"arche"`
-	Topics       []string      `env:"KAFKA_TOPICS"        env-separator:"," env-default:"arche.example"`
-	DialTimeout  time.Duration `env:"KAFKA_DIAL_TIMEOUT"  env-default:"10s"`
-	Username     string        `env:"KAFKA_USERNAME"`
-	Password     string        `env:"KAFKA_PASSWORD"`
-	MaxRetries   int           `env:"KAFKA_MAX_RETRIES"   env-default:"3"`
-	RetryBackoff time.Duration `env:"KAFKA_RETRY_BACKOFF" env-default:"2s"`
+	Brokers  []string `env:"KAFKA_BROKERS"  env-separator:"," env-default:"localhost:19092"`
+	GroupID  string   `env:"KAFKA_GROUP_ID"`
+	Topics   []string `env:"KAFKA_TOPICS"   env-separator:","`
+	Username string   `env:"KAFKA_USERNAME"`
+	Password string   `env:"KAFKA_PASSWORD"`
 }
 
 func Load() (*Config, error) {

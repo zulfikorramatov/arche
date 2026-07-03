@@ -2,6 +2,7 @@ package user
 
 import (
 	"github.com/spf13/cobra"
+
 	"github.com/zulfikorramatov/arche/cmd/cli/deps"
 )
 

@@ -9,8 +9,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-const defaultRetryBackoff = time.Second
-
 // Handler processes a single consumed message. Returning an error triggers a
 // bounded retry (see Config.MaxRetries); if every attempt fails the error is
 // fatal and Run returns it. Handlers must be idempotent — at-least-once means
@@ -26,20 +24,25 @@ type Consumer struct {
 	retryBackoff time.Duration
 }
 
-func NewConsumer(ctx context.Context, cfg Config) (*Consumer, error) {
-	opts := append(
-		clientOpts(cfg),
+func NewConsumer(ctx context.Context, cfg Config, opts ...Option) (*Consumer, error) {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	clientOptions := append(
+		clientOpts(cfg, o),
 		kgo.ConsumerGroup(cfg.GroupID),
 		kgo.ConsumeTopics(cfg.Topics...),
 		kgo.DisableAutoCommit(),
 	)
 
-	client, err := kgo.NewClient(opts...)
+	client, err := kgo.NewClient(clientOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("new consumer client: %w", err)
 	}
 
-	pingCtx, cancel := context.WithTimeout(ctx, cfg.DialTimeout)
+	pingCtx, cancel := context.WithTimeout(ctx, o.dialTimeout)
 	defer cancel()
 
 	if err := client.Ping(pingCtx); err != nil {
@@ -47,12 +50,7 @@ func NewConsumer(ctx context.Context, cfg Config) (*Consumer, error) {
 		return nil, fmt.Errorf("ping: %w", err)
 	}
 
-	backoff := cfg.RetryBackoff
-	if backoff <= 0 {
-		backoff = defaultRetryBackoff
-	}
-
-	return &Consumer{client: client, maxRetries: cfg.MaxRetries, retryBackoff: backoff}, nil
+	return &Consumer{client: client, maxRetries: o.maxRetries, retryBackoff: o.retryBackoff}, nil
 }
 
 // Run polls and dispatches messages until ctx is canceled (clean shutdown,

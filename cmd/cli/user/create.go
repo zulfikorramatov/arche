@@ -6,8 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-	"github.com/zulfikorramatov/arche/cmd/cli/deps"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/zulfikorramatov/arche/cmd/cli/deps"
 )
 
 func newCreateCmd(d *deps.Deps) *cobra.Command {

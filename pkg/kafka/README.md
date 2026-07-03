@@ -20,20 +20,29 @@
 
 ```go
 type Config struct {
-    Brokers      []string      // адреса брокеров, напр. []string{"localhost:19092"}
-    GroupID      string        // consumer group id
-    Topics       []string      // топики для consumer
-    DialTimeout  time.Duration // таймаут подключения и ping
-    Username     string        // опционально: SASL/SCRAM-SHA-512
-    Password     string
-    MaxRetries   int           // consumer: ретраев на сообщение до фатальной ошибки
-    RetryBackoff time.Duration // consumer: задержка между ретраями
+    Brokers  []string // адреса брокеров, напр. []string{"localhost:19092"}
+    GroupID  string   // consumer group id
+    Topics   []string // топики для consumer
+    Username string   // опционально: SASL/SCRAM-SHA-512
+    Password string
 }
 ```
 
-`Config` зеркалится один-в-один структурой `config.KafkaConfig` в `internal/config`, поэтому в
-`app.go` используется прямая конвертация `kafka.Config(cfg.Kafka)` — если поля разойдутся, проект
-**не соберётся** (это и есть защита от рассинхрона).
+`Config` содержит только необходимое для подключения и зеркалится один-в-один структурой
+`config.KafkaConfig` в `internal/config`, поэтому в `app.go` используется прямая конвертация
+`kafka.Config(cfg.Kafka)` — если поля разойдутся, проект **не соберётся** (это и есть защита от
+рассинхрона).
+
+## Options
+
+Тюнинг вынесен из `Config` в функциональные опции (как в `pkg/postgres` и `pkg/redis`) — задаётся в
+коде, а не через env. У всех есть разумные дефолты:
+
+```go
+kafka.WithDialTimeout(d)  // таймаут подключения и ping (дефолт 10s)
+kafka.WithMaxRetries(n)   // consumer: ретраев на сообщение до фатальной ошибки (дефолт 3)
+kafka.WithRetryBackoff(d) // consumer: задержка между ретраями (дефолт 1s)
+```
 
 ## Producer
 

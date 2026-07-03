@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/zulfikorramatov/arche/pkg/redis"
 	"go.elastic.co/apm/v2"
 
 	"github.com/zulfikorramatov/arche/internal/config"
@@ -16,6 +15,7 @@ import (
 	"github.com/zulfikorramatov/arche/internal/service"
 	"github.com/zulfikorramatov/arche/pkg/logger"
 	"github.com/zulfikorramatov/arche/pkg/postgres"
+	"github.com/zulfikorramatov/arche/pkg/redis"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
