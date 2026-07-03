@@ -19,8 +19,6 @@ type Message struct {
 	Value []byte
 }
 
-// clientOpts builds the options shared by the producer and consumer: seed
-// brokers, dial timeout and optional SASL/SCRAM-SHA-512 auth.
 func clientOpts(cfg Config, o options) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
