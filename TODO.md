@@ -1,2 +1,3 @@
-1. build cobra
-2. inbox & outbox pattern
+1. update Dockerfile
+2. cache basic auth
+3. inbox & outbox pattern

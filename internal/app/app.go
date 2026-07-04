@@ -24,7 +24,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("new logger: %w", err)
 	}
 
-	pg, err := postgres.New(ctx, postgres.Config(cfg.Postgres))
+	pg, err := postgres.New(ctx, buildPostgresConfig(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("new postgres: %w", err)
 	}
@@ -72,31 +72,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	log.Info("http server stopped")
 
 	return runErr
-}
-
-func buildRedisConfig(cfg config.RedisConfig) redis.Config {
-	var sentinelAddrs []string
-	if cfg.SentinelEnabled {
-		port := fmt.Sprintf("%d", cfg.SentinelPort)
-		for _, host := range []string{cfg.SentinelHost1, cfg.SentinelHost2, cfg.SentinelHost3} {
-			if host != "" {
-				sentinelAddrs = append(sentinelAddrs, host+":"+port)
-			}
-		}
-	}
-
-	return redis.Config{
-		Host:               cfg.Host,
-		Port:               cfg.Port,
-		Username:           cfg.Username,
-		Password:           cfg.Password,
-		DB:                 cfg.DB,
-		KeyPrefix:          cfg.KeyPrefix,
-		SentinelEnabled:    cfg.SentinelEnabled,
-		SentinelAddrs:      sentinelAddrs,
-		SentinelMasterName: cfg.SentinelMasterName,
-		SentinelPassword:   cfg.SentinelPassword,
-	}
 }
 
 func newHttpServer(
