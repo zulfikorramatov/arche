@@ -147,5 +147,3 @@ make fmt
 make lint
 make test
 ```
-
-Соглашения проекта и правила для AI-ассистента — в [CLAUDE.md](CLAUDE.md).
