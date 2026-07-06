@@ -6,8 +6,8 @@ design-first HTTP-слоем на OpenAPI и набором готовой ин�
 
 Собирается в два бинарника:
 
-- **HTTP-сервер** — `cmd/app` → `bin/arche`
-- **CLI (Cobra)** — `cmd/cli` → `bin/arche-cli`
+- **HTTP-сервер** — `cmd/app` → `bin/app`
+- **CLI (Cobra)** — `cmd/cli` → `bin/cli`
 
 ## Требования
 
@@ -36,7 +36,7 @@ make run
 
 ```bash
 make build-cli
-./bin/arche-cli user create --username alice --password secret
+./bin/cli user create --username alice --password secret
 
 # Проверка
 curl -u alice:secret http://localhost:8080/users

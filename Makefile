@@ -19,14 +19,14 @@ tidy: ## Run go mod tidy
 	go mod tidy
 
 .PHONY: build
-build: ## Build the binary into $(BIN_DIR)/$(APP_NAME)
+build: ## Build the binary into $(BIN_DIR)/app
 	mkdir -p $(BIN_DIR)
-	go build -ldflags="-s -w" -o $(BIN_DIR)/$(APP_NAME) ./cmd/app
+	go build -ldflags="-s -w" -o $(BIN_DIR)/app ./cmd/app
 
 .PHONY: build-cli
-build-cli: ## Build the CLI binary into $(BIN_DIR)/$(APP_NAME)-cli
+build-cli: ## Build the CLI binary into $(BIN_DIR)/cli
 	mkdir -p $(BIN_DIR)
-	go build -ldflags="-s -w" -o $(BIN_DIR)/$(APP_NAME)-cli ./cmd/cli
+	go build -ldflags="-s -w" -o $(BIN_DIR)/cli ./cmd/cli
 
 .PHONY: run
 run: ## Run the app locally (loads .env from the project root)
