@@ -38,6 +38,9 @@ make run
 make build-cli
 ./bin/cli user create --username alice --password secret
 
+# Затем сгенерируйте AUTH_HMAC_KEY и вставьте в .env:
+openssl rand -hex 32
+
 # Проверка
 curl -u alice:secret http://localhost:8080/users
 ```

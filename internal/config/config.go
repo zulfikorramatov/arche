@@ -10,6 +10,7 @@ import (
 
 type Config struct {
 	App      AppConfig
+	Auth     AuthConfig
 	HTTP     HTTPConfig
 	Logger   LoggerConfig
 	Postgres PostgresConfig
@@ -20,6 +21,10 @@ type Config struct {
 type AppConfig struct {
 	Name string `env:"APP_NAME"`
 	Env  string `env:"APP_ENV"  env-default:"local"`
+}
+
+type AuthConfig struct {
+	HMACKey []byte `env:"AUTH_HMAC_KEY,required"`
 }
 
 type HTTPConfig struct {

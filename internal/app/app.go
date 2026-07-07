@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/zulfikorramatov/arche/internal/auth"
 	"go.elastic.co/apm/v2"
 
 	"github.com/zulfikorramatov/arche/internal/config"
@@ -39,7 +40,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	userRepo := repository.NewUserRepository(pg)
 	userSvc := service.NewUserService(userRepo)
 
-	srv, err := newHttpServer(cfg, log, userSvc)
+	authenticator := auth.NewCachingAuthenticator(userSvc, cfg.Auth.HMACKey)
+
+	srv, err := newHttpServer(cfg, log, userSvc, authenticator)
 	if err != nil {
 		return fmt.Errorf("new http server: %w", err)
 	}
@@ -78,10 +81,11 @@ func newHttpServer(
 	cfg *config.Config,
 	log *logger.Logger,
 	userSvc *service.UserService,
+	authenticator *auth.CachingAuthenticator,
 ) (*http.Server, error) {
 	server := handler.NewServer(log, userSvc)
 
-	router, err := httpserver.NewRouter(log, server, userSvc)
+	router, err := httpserver.NewRouter(log, server, authenticator)
 	if err != nil {
 		return nil, fmt.Errorf("new router: %w", err)
 	}
